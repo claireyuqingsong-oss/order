@@ -43,9 +43,6 @@ except Exception as e:
     st.error("⚠️ 获取凭证失败！请检查 Streamlit 后台 Secrets 是否正确填入 SUPABASE_URL 和 SUPABASE_KEY。")
     st.stop()
 
-@st.set_data if True: # 兼容老版流
-    st.cache_data.clear()
-
 @st.cache_data(ttl=1) # 1秒极速缓存
 def load_db_data():
     """实时读取 Supabase 云数据库数据"""
@@ -122,6 +119,7 @@ def load_db_data():
 
     return projects_dict, orders_dict, collections_list, revenues_list, ledger_list
 
+st.cache_data.clear()
 projects, orders, collections, revenues, ledgers = load_db_data()
 
 def get_quarter(date_str):
@@ -129,6 +127,12 @@ def get_quarter(date_str):
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         return dt.year, f"Q{(dt.month - 1) // 3 + 1}"
     except: return None, None
+
+def make_csv_buffer(df):
+    if df.empty: return None
+    buffer = io.StringIO()
+    df.to_csv(buffer, index=False, encoding='utf-8-sig')
+    return buffer.getvalue()
 
 # 动态提取所有去重账户，构建自生长账户树
 existing_accounts = set(BASE_ACCOUNTS)
@@ -153,7 +157,7 @@ with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心", "🏦 复式财务管理中心", "💾 往年库容释放与数据导出"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏 (100% 完整版)
+# 3. 页面 1: 业绩与KPI大屏
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
@@ -234,7 +238,7 @@ if menu == "📊 业绩与KPI大屏":
         st.plotly_chart(fig_q, use_container_width=True)
 
 # ==========================================
-# 4. 页面 2: 综合业务台账 (100% 完整版)
+# 4. 页面 2: 综合业务台账
 # ==========================================
 elif menu == "📝 综合业务台账":
     st.title("📝 综合业务拉通明细台账")
@@ -293,7 +297,7 @@ elif menu == "📝 综合业务台账":
         st.dataframe(df_o_view, use_container_width=True, hide_index=True)
 
 # ==========================================
-# 5. 页面 3: 业务数据维护中心 (100% 完整版)
+# 5. 页面 3: 业务数据维护中心
 # ==========================================
 elif menu == "➕ 业务数据维护中心":
     st.title("🛠️ 业务数据全生命周期维护中心")
@@ -460,7 +464,7 @@ elif menu == "➕ 业务数据维护中心":
                         if res.status_code in [200, 204]: st.success("🎉 订单明细强审计更新成功！"); st.rerun()
 
 # ==========================================
-# 6. 🏦 复式财务管理中心 (100% 完整版)
+# 6. 🏦 复式财务管理中心
 # ==========================================
 elif menu == "🏦 复式财务管理中心":
     st.title("🏦 个人与家庭复式财务账本中心 (hledger 高度自由版)")
@@ -578,7 +582,7 @@ elif menu == "🏦 复式财务管理中心":
                 else: st.error("网络异常，写入失败。")
 
 # ==========================================
-# 7. 💾 往年库容释放与数据导出中心 (100% 完整版)
+# 7. 💾 往年库容释放与数据导出中心
 # ==========================================
 elif menu == "💾 往年库容释放与数据导出":
     st.title("💾 往年库容释放与本地数据备份中心")
@@ -596,7 +600,7 @@ elif menu == "💾 往年库容释放与数据导出":
         
     st.markdown("---")
     
-    # 📅 业务按年熔断清空
+    # 📅 业务按年归档
     st.subheader("📅 业务销售数据专项：按年度归档与容量清空")
     export_year = st.selectbox("请选择要处理的销售业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
     st.write(f"📡 正在动态扫描 `{export_year}` 年的销售回款台账...")
