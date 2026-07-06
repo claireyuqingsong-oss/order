@@ -2,7 +2,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, date
 import requests
 
 # ==========================================
@@ -57,7 +57,7 @@ def load_db_data():
                 "tax_rate": float(row['tax_rate']), "quantity": int(row['quantity']),
                 "amt_no_tax": float(row['amt_no_tax']), "amt_with_tax": float(row['amt_with_tax']),
                 "p_ref": row.get('project_ref'), "order_p_name": row['order_p_name'], "collect_total": 0.0,
-                "is_history": row.get('project_ref') is None # 💡 标记是否为历史老订单
+                "is_history": row.get('project_ref') is None 
             }
         
     collections_list = []
@@ -96,37 +96,26 @@ st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏 (核心修改：完美隔离历史老账算法)
+# 3. 页面 1: 业绩与KPI大屏
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("📊 通信销售业绩与交付管道大屏")
     
-    # 1. 前期跟进标的求和
     pipeline_target = sum(p["target"] for p in projects.values() if p["stage"] != "已中标")
-    
-    # 2. 累计税后订单金额：按实际录入的所有订单金额求和（包含主线和历史老账，确保基础数据对得上）
     total_order_tax_in = sum(o["amt_with_tax"] for o in orders.values())
-    
-    # 3. 累计回款到账：按录入的所有回款金额无条件累加（财务进账纯流水）
     total_collected = sum(c["amount"] for c in collections)
     
-    # 💡 4. 核心隔离算法：整体合同回款率计算（剔除老账干扰）
-    # 分母：仅计算系统正常主线业务的订单总额
     main_order_total = sum(o["amt_with_tax"] for o in orders.values() if not o["is_history"])
-    # 分子：仅计算系统正常主线业务已收到的回款额
     main_collected_total = sum(o["collect_total"] for o in orders.values() if not o["is_history"])
     
-    # 真实计算当下核心业务的回款率
     rate = (main_collected_total / main_order_total * 100) if main_order_total > 0 else 0.0
-    
-    # 真实计算当下核心业务的待催收尾款
     main_uncollected = max(0.0, main_order_total - main_collected_total)
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("跟进中项目预估标的", f"¥{pipeline_target:,.2f}")
     col2.metric("累计税后订单/合计数", f"¥{total_order_tax_in:,.2f}")
     col3.metric("累计回款到账(含历史老账)", f"¥{total_collected:,.2f}")
-    col4.metric("核心业务合同回款率", f"{rate:.1f}%", help="此指标已自动为您隔离多年前历史老账回款的污染，精准考核主线业务催收率。")
+    col4.metric("核心业务合同回款率", f"{rate:.1f}%", help="此指标已自动为您隔离多年前历史老账回款的污染。")
 
     st.markdown("---")
     g1, g2 = st.columns(2)
@@ -148,19 +137,28 @@ if menu == "📊 业绩与KPI大屏":
             st.info("暂无核心正式合同订单生成财务图表")
 
 # ==========================================
-# 4. 页面 2: 综合业务台账 
+# 4. 页面 2: 综合业务台账 (核心升级：加入时间范围选项)
 # ==========================================
 elif menu == "📝 综合业务台账":
     st.title("📝 综合业务拉通明细台账")
     
     st.markdown("### 🎛️ 数据中心快速过滤器")
-    f_col1, f_col2 = st.columns(2)
+    f_col1, f_col2, f_col3 = st.columns(3) # 💡 拆分为3列，留出一列给日期
     
     unique_projects = ["全部项目"] + sorted(list(set(p["name"] for p in projects.values())))
     unique_provinces = ["全部省份"] + sorted(list(set(o["province"] for o in orders.values())))
     
-    selected_project = f_col1.selectbox("🎯 按关联框架项目名称过滤：", unique_projects)
-    selected_province = f_col2.selectbox("📍 按订单所属区域省份过滤：", unique_provinces)
+    selected_project = f_col1.selectbox("🎯 按关联框架项目过滤：", unique_projects)
+    selected_province = f_col2.selectbox("📍 按订单区域省份过滤：", unique_provinces)
+    
+    # 💡 核心修改：增加订单签署时间段滑块组件（默认选定今年年初到今天）
+    today = date.today()
+    start_of_year = date(today.year, 1, 1)
+    date_range = f_col3.date_input(
+        "📅 筛选订单签署日期范围：",
+        value=(start_of_year, today),
+        help="点击可以自由在手机/电脑上框选特定的历史时间段进行看账"
+    )
     st.markdown("---")
 
     # --- 模块 B：框架项目看板 ---
@@ -211,10 +209,20 @@ elif menu == "📝 综合业务台账":
     for oid, o in orders.items():
         related_p_name = projects[o["p_ref"]]["name"] if o["p_ref"] and o["p_ref"] in projects else "历史老账/无需补录项目"
         
+        # 1. 项目与省份基础过滤
         if selected_project != "全部项目" and related_p_name != selected_project:
             continue
         if selected_province != "全部省份" and o["province"] != selected_province:
             continue
+            
+        # 2. 💡 时间范围段拦截校对过滤
+        try:
+            o_date_obj = datetime.strptime(o["date"], "%Y-%m-%d").date()
+            if isinstance(date_range, tuple) and len(date_range) == 2:
+                if not (date_range[0] <= o_date_obj <= date_range[1]):
+                    continue
+        except:
+            pass # 无法解析的日期不拦截
             
         uncollected = max(0.0, o["amt_with_tax"] - o["collect_total"])
         order_rows.append({
@@ -244,16 +252,16 @@ elif menu == "📝 综合业务台账":
         df_o_view = df_o_view.reindex(columns=column_order)
         
         s1, s2, s3 = st.columns(3)
-        s1.metric("当前筛选正式订单", f"{len(df_o_view)} 笔")
-        s2.metric("当前筛选合同含税额", f"¥{df_o_view['订单含税金额'].sum():,.2f}")
-        s3.metric("当前筛选待收总尾款", f"¥{df_o_view['待追收尾款'].sum():,.2f}")
+        s1.metric("当前显示时间段订单", f"{len(df_o_view)} 笔")
+        s2.metric("当前显示段合同含税额", f"¥{df_o_view['订单含税金额'].sum():,.2f}")
+        s3.metric("当前显示段待收总尾款", f"¥{df_o_view['待追收尾款'].sum():,.2f}")
         
         st.dataframe(df_o_view, use_container_width=True, hide_index=True)
     else:
-        st.info("暂无符合筛选条件的正式合同订单数据")
+        st.info("选定的日期范围内暂无符合过滤条件的正式订单数据")
 
 # ==========================================
-# 5. 页面 3: 业务数据维护中心
+# 5. 页面 3: 业务数据维护中心 (核心升级：强制填写修改原因审计线索)
 # ==========================================
 elif menu == "➕ 业务数据维护中心":
     st.title("🛠️ 业务数据全生命周期维护中心")
@@ -350,11 +358,10 @@ elif menu == "➕ 业务数据维护中心":
                     elif c_amt <= 0: 
                         st.error("❌ 回款金额需大于0元！")
                     else:
-                        # 💡 完美的历史与现实对冲隔离机制：
                         if is_manual_order and (cleaned_oid not in orders):
                             hedge_payload = {
                                 "id": cleaned_oid,
-                                "project_ref": None,  # 🌟 关键：不关联任何项目，标记为纯历史归档订单
+                                "project_ref": None, 
                                 "order_date": c_date,
                                 "province": "历史老账归档区",
                                 "client": "历史长账龄客户",
@@ -368,7 +375,6 @@ elif menu == "➕ 业务数据维护中心":
                             }
                             requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=hedge_payload, timeout=5)
                         
-                        # 标准流水登记
                         c_payload = {
                             "order_ref": cleaned_oid, 
                             "amount": c_amt, 
@@ -383,7 +389,7 @@ elif menu == "➕ 业务数据维护中心":
                         else:
                             st.error(f"回款录入失败: {res.text}")
 
-    # 修改功能
+    # ⚙️ 修改已有信息 (包含修改原因审计追加功能)
     elif op_type == "⚙️ 修改已有信息 (数据回显覆写)":
         edit_target = st.radio("请选择需要修改的内容类型：", ["🎯 修改框架项目", "🤝 修改订单明细"], horizontal=True)
         st.markdown("---")
@@ -403,16 +409,30 @@ elif menu == "➕ 业务数据维护中心":
                 try: old_dt = datetime.strptime(old_p["bid_date"], "%Y-%m-%d")
                 except: old_dt = datetime.now()
                 up_p_date = st.date_input("开标时间", value=old_dt).strftime("%Y-%m-%d")
+                
+                # 💡 强审：新增项目更正原因
+                p_edit_reason = st.text_area("🔧 请硬性输入本次项目调整/修正的原因备注 * (必填)")
 
                 if st.button("💾 覆写并保存项目修改"):
-                    up_payload = {"name": up_p_name, "client": up_p_client, "target": up_p_target, "stage": up_p_stage, "bid_date": up_p_date}
-                    res = requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
-                    if res.status_code in [200, 204]:
-                        st.success("🎉 框架项目信息在 Supabase 云端已成功更新覆写！")
-                        st.cache_data.clear()
-                        st.rerun()
+                    if not p_edit_reason.strip():
+                        st.error("❌ 必须填写修改原因才能提交，方便日后数据追溯！")
                     else:
-                        st.error(f"更新项目失败: {res.text}")
+                        # 自动在云端状态或记录里打上审计小尾巴
+                        trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {p_edit_reason.strip()}]"
+                        up_payload = {
+                            "name": up_p_name, 
+                            "client": up_p_client, 
+                            "target": up_p_target, 
+                            "stage": up_p_stage + trace_stamp, # 追加小尾巴
+                            "bid_date": up_p_date
+                        }
+                        res = requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
+                        if res.status_code in [200, 204]:
+                            st.success("🎉 框架项目已成功更正，审计原因线索已安全锁死留档！")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"更新项目失败: {res.text}")
 
         elif edit_target == "🤝 修改订单明细":
             if not orders: st.info("云端暂无订单数据可修改")
@@ -424,7 +444,7 @@ elif menu == "➕ 业务数据维护中心":
 
                 up_o_province = st.text_input("省份", value=old_o["province"])
                 up_o_client = st.text_input("客户简称", value=old_o["client"])
-                up_o_product = st.text_input("订单产品", value=old_o["product"])
+                up_o_product = st.text_input("订单产品(去除旧留档后缀)", value=old_o["product"].split(" [修改痕迹")[0])
                 up_o_p_name = st.text_input("订单项目名称", value=old_o["order_p_name"])
 
                 cep, cer, ceq = st.columns(3)
@@ -438,13 +458,32 @@ elif menu == "➕ 业务数据维护中心":
                 try: old_o_dt = datetime.strptime(old_o["date"], "%Y-%m-%d")
                 except: old_o_dt = datetime.now()
                 up_o_date = st.date_input("订单日期", value=old_o_dt).strftime("%Y-%m-%d")
+                
+                # 💡 强审：新增订单更正原因
+                o_edit_reason = st.text_area("🔧 请硬性输入本次订单调整/修正的原因备注 * (必填)")
 
                 if st.button("💾 覆写并保存订单修改"):
-                    up_o_payload = {"province": up_o_province, "client": up_o_client, "product": up_o_product, "order_p_name": up_o_p_name, "price_no_tax": up_price, "tax_rate": up_tax_rate, "quantity": up_qty, "amt_no_tax": new_no_tax, "amt_with_tax": new_tax_in, "order_date": up_o_date}
-                    res = requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
-                    if res.status_code in [200, 204]:
-                        st.success("🎉 订单明细及联动核税在云端已成功更新覆写！")
-                        st.cache_data.clear()
-                        st.rerun()
+                    if not o_edit_reason.strip():
+                        st.error("❌ 必须填写修改原因才能提交，方便日后数据追溯！")
                     else:
-                        st.error(f"更新订单失败: {res.text}")
+                        # 自动在订单的‘订购产品明细’尾部追加追溯证据串
+                        trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {o_edit_reason.strip()}]"
+                        up_o_payload = {
+                            "province": up_o_province, 
+                            "client": up_o_client, 
+                            "product": up_o_product + trace_stamp, # 注入追溯机制
+                            "order_p_name": up_o_p_name, 
+                            "price_no_tax": up_price, 
+                            "tax_rate": up_tax_rate, 
+                            "quantity": up_qty, 
+                            "amt_no_tax": new_no_tax, 
+                            "amt_with_tax": new_tax_in, 
+                            "order_date": up_o_date
+                        }
+                        res = requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
+                        if res.status_code in [200, 204]:
+                            st.success("🎉 订单财务明细已成功更正，修改缘由已嵌入台账产品流中留档！")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"更新订单失败: {res.text}")
