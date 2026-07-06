@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 from datetime import datetime, date
 import requests
+import io
 
 # ==========================================
 # 0. 页面基础配置 (必须作为首句)
@@ -119,13 +120,16 @@ def get_quarter(date_str):
 st.sidebar.title("📱 通信销售云工作台")
 st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通道已就绪`")
 
-# 📊 支持手动任意动态调整的 KPI 目标设置按钮区
+# 📊 自动识别当前年份系统，支持手动任意动态调整的 KPI 目标设置按钮区
+# 💡 升级：从系统时间自动提取实际年份，不写死
+system_current_year = datetime.now().year
+
 with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
-    st.markdown("可在下方直接调整当年的财务硬性 KPI 考核指标：")
+    st.markdown(f"可在下方直接调整 **{system_current_year}** 年的财务硬性 KPI 考核指标：")
     cfg_rev = st.number_input("本年度确认收入(确收)目标(元)", min_value=0.0, value=5000000.0, step=50000.0)
     cfg_col = st.number_input("本年度到账回款目标(元)", min_value=0.0, value=4500000.0, step=50000.0)
 
-menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心"])
+menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心", "💾 往年库容释放与数据导出"])
 
 # ==========================================
 # 3. 页面 1: 业绩与KPI大屏
@@ -133,7 +137,7 @@ menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
     
-    current_year = 2026 
+    current_year = system_current_year # 💡 自动联动系统实际年份
     
     # 抓取今年最新 Supabase 云端确收与回款数据
     annual_revenue_done = sum(r["amount"] for r in revenues if datetime.strptime(r["date"], "%Y-%m-%d").year == current_year)
@@ -457,3 +461,138 @@ elif menu == "➕ 业务数据维护中心":
                         up_o_payload = {"province": up_o_province, "client": up_o_client, "product": up_o_product + trace_stamp, "order_p_name": up_o_p_name, "price_no_tax": up_price, "tax_rate": up_tax_rate, "quantity": up_qty, "amt_no_tax": new_no_tax, "amt_with_tax": new_tax_in, "order_date": up_o_date}
                         res = requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
                         if res.status_code in [200, 204]: st.success("🎉 订单财务明细已成功更正！"); st.cache_data.clear(); st.rerun()
+
+# ==========================================
+# 6. 💡 新增独立页面: 往年库容释放与本地 MySQL 数据导出中心
+# ==========================================
+elif menu == "💾 往年库容释放与数据导出":
+    st.title("💾 往年库容释放与本地 MySQL 数据归档备份中心")
+    st.markdown("为了保证公网 Supabase 500MB 免费额度永不超标，您可以在此一键拉取并导出当前年份在云端存储的所有细分台账。导出的格式完全兼容 **MySQL 的本地数据库直接导入**。")
+    
+    # 允许选择年份导出（默认当前年份）
+    export_year = st.selectbox("请选择要批量导出的业务年份数据：", list(range(system_current_year-2, system_current_year+2)), index=2)
+    st.write(f"正在扫描并打包 `{export_year}` 年的云端台账...")
+
+    # 从原始通过官方 API 拿到的结构中过滤指定年份的数据
+    # 1. 框架项目
+    p_exported = []
+    for p in projects.values():
+        try:
+            if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year:
+                p_exported.append({"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]})
+        except: pass
+    df_export_p = pd.DataFrame(p_exported)
+
+    # 2. 订单
+    o_exported = []
+    for o in orders.values():
+        try:
+            if datetime.strptime(o["date"], "%Y-%m-%d").year == export_year:
+                o_exported.append({"id": o["id"], "project_ref": o["p_ref"], "order_date": o["date"], "province": o["province"], "client": o["client"], "product": o["product"], "price_no_tax": o["price_no_tax"], "tax_rate": o["tax_rate"], "quantity": o["quantity"], "amt_no_tax": o["amt_no_tax"], "amt_with_tax": o["amt_with_tax"], "order_p_name": o["order_p_name"]})
+        except: pass
+    df_export_o = pd.DataFrame(o_exported)
+
+    # 3. 回款
+    c_exported = []
+    for row in collections:
+        try:
+            if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year:
+                c_exported.append({"order_ref": row["o_ref"], "amount": row["amount"], "collection_date": row["date"], "invoice_no": row["invoice_no"]})
+        except: pass
+    df_export_c = pd.DataFrame(c_exported)
+
+    # 4. 确收收入
+    r_exported = []
+    for row in revenues:
+        try:
+            if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year:
+                r_exported.append({"order_ref": row["o_ref"], "amount": row["amount"], "revenue_date": row["date"]})
+        except: pass
+    df_export_r = pd.DataFrame(r_exported)
+
+    # 渲染下载界面排版
+    dl_col1, dl_col2, dl_col3, dl_col4 = st.columns(4)
+
+    def make_csv_buffer(df):
+        if df.empty: return None
+        buffer = io.StringIO()
+        df.to_csv(buffer, index=False, encoding='utf-8-sig')
+        return buffer.getvalue()
+
+    with dl_col1:
+        st.metric("1. 框架项目数", len(p_exported))
+        csv_p = make_csv_buffer(df_export_p)
+        if csv_p: st.download_button(f"📥 下载 projects_{export_year}.csv", csv_p, f"mysql_projects_{export_year}.csv", "text/csv")
+        
+    with dl_col2:
+        st.metric("2. 正式订单数", len(o_exported))
+        csv_o = make_csv_buffer(df_export_o)
+        if csv_o: st.download_button(f"📥 下载 orders_{export_year}.csv", csv_o, f"mysql_orders_{export_year}.csv", "text/csv")
+
+    with dl_col3:
+        st.metric("3. 回款到账流水", len(c_exported))
+        csv_c = make_csv_buffer(df_export_c)
+        if csv_c: st.download_button(f"📥 下载 collections_{export_year}.csv", csv_c, f"mysql_collections_{export_year}.csv", "text/csv")
+
+    with dl_col4:
+        st.metric("4. 网签确收流水", len(r_exported))
+        csv_r = make_csv_buffer(df_export_r)
+        if csv_r: st.download_button(f"📥 下载 revenues_{export_year}.csv", csv_r, f"mysql_revenues_{export_year}.csv", "text/csv")
+
+    st.markdown("---")
+    
+    # 贴心附送：本地 MySQL 一键建表 DDL 工具区
+    with st.expander("🛠️ 查看本地 MySQL 一键建表标准 SQL 语句（DDL）"):
+        st.markdown("如果您在本地物理电脑搭建了 MySQL 数据库，在第一次导入上述生成的 CSV 前，请先在本地执行以下标准的建表命令：")
+        mysql_ddl_code = """-- 1. 创建本地销售数据库
+CREATE DATABASE IF NOT EXISTS sale_archive_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE sale_archive_db;
+
+-- 2. 建立框架项目表
+CREATE TABLE `projects` (
+  `id` varchar(64) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `client` varchar(255) DEFAULT NULL,
+  `target` decimal(16,2) DEFAULT '0.00',
+  `stage` varchar(100) DEFAULT NULL,
+  `bid_date` date DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 3. 建立中标订单表
+CREATE TABLE `orders` (
+  `id` varchar(64) NOT NULL,
+  `project_ref` varchar(64) DEFAULT NULL,
+  `order_date` date DEFAULT NULL,
+  `province` varchar(100) DEFAULT NULL,
+  `client` varchar(255) DEFAULT NULL,
+  `product` text,
+  `price_no_tax` decimal(16,2) DEFAULT '0.00',
+  `tax_rate` decimal(5,4) DEFAULT '0.0000',
+  `quantity` int(11) DEFAULT '1',
+  `amt_no_tax` decimal(16,2) DEFAULT '0.00',
+  `amt_with_tax` decimal(16,2) DEFAULT '0.00',
+  `order_p_name` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4. 建立到账回款表
+CREATE TABLE `collections` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `order_ref` varchar(64) DEFAULT NULL,
+  `amount` decimal(16,2) DEFAULT '0.00',
+  `collection_date` date DEFAULT NULL,
+  `invoice_no` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 5. 建立确认收入表
+CREATE TABLE `revenues` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `order_ref` varchar(64) DEFAULT NULL,
+  `amount` decimal(16,2) DEFAULT '0.00',
+  `revenue_date` date DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"""
+        st.code(mysql_ddl_code, language="sql")
+        st.success("💡 操作小贴士：下载对应的 CSV 数据后，可直接在本地使用 Navicat 或 DataGrip 等可视化工具，右键对应的本地 MySQL 表结构，选择“导入向导”->“CSV 文件”即可实现秒级离线存储！导入成功后便可在 Supabase 中清空当年历史，释放云容。")
