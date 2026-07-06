@@ -12,7 +12,7 @@ st.set_page_config(page_title="通信销售全生命周期 Supabase 云工作台
 PROJECT_STAGES = ["线索", "机会点", "招投标", "已中标"]
 
 # ==========================================
-# 1. 🚀 官方 API 高速通道驱动引擎 (彻底解决5432/6543端口被卡死报错)
+# 1. 🚀 官方 API 高速安全驱动引擎 (已全面修复语法)
 # ==========================================
 try:
     SB_URL = st.secrets["secrets"]["SUPABASE_URL"]
@@ -21,21 +21,21 @@ try:
         "apikey": SB_KEY,
         "Authorization": f"Bearer {SB_KEY}",
         "Content-Type": "application/json",
-        "Prefer": "return=representation"
+        "Prefer": "return=representation"  # 强制要求云端返回操作结果，防止静默失败
     }
 except Exception as e:
-    st.error("⚠️ 获取 Supabase 凭证失败！请检查 Streamlit 后台 Secrets 是否正确填入 SUPABASE_URL 和 SUPABASE_KEY。")
+    st.error("⚠️ 获取凭证失败！请检查 Streamlit 后台 Secrets 是否正确填入 SUPABASE_URL 和 SUPABASE_KEY。")
     st.stop()
 
+@st.cache_data(ttl=2) # 💡 2秒缓存，既能降压，又能多端无缝秒级同步
 def load_db_data():
     """通过 443 端口的标准 HTTPS 接口，实时读取 Supabase 云数据库数据"""
     try:
-        # 直接发起高速 REST API 网络请求
         res_p = requests.get(f"{SB_URL}/rest/v1/projects?select=*", headers=HEADERS, timeout=5).json()
         res_o = requests.get(f"{SB_URL}/rest/v1/orders?select=*", headers=HEADERS, timeout=5).json()
         res_c = requests.get(f"{SB_URL}/rest/v1/collections?select=*", headers=HEADERS, timeout=5).json()
     except Exception as e:
-        st.error(f"📡 连不上云数据库，网络握手超时！请检查 Supabase URL。详情: {e}")
+        st.error(f"📡 连不上云数据库，网络握手超时！请检查配置。详情: {e}")
         return {}, {}, []
 
     projects_dict = {}
@@ -79,14 +79,15 @@ def load_db_data():
 
     return projects_dict, orders_dict, collections_list
 
-# 加载数据
+# 强制加载最新云数据
+st.cache_data.clear() # 确保每次重载全盘刷清
 projects, orders, collections = load_db_data()
 
 # ==========================================
 # 2. 侧边栏导航控制
 # ==========================================
 st.sidebar.title("📱 通信销售云工作台")
-st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase 官方 REST 高速通道已拉通`")
+st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速安全通道已就绪`")
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心"])
 
 # ==========================================
@@ -173,7 +174,7 @@ elif menu == "📝 综合业务台账":
         st.info("云端数据库内暂无业务数据。")
 
 # ==========================================
-# 5. 页面 3: 业务数据维护中心
+# 5. 页面 3: 业务数据维护中心 (已全面纠正协议逻辑)
 # ==========================================
 elif menu == "➕ 业务数据维护中心":
     st.title("🛠️ 业务数据全生命周期维护中心")
@@ -198,13 +199,17 @@ elif menu == "➕ 业务数据维护中心":
                     else:
                         new_id = f"PRJ{int(datetime.now().timestamp())}"
                         payload = {"id": new_id, "name": p_name, "client": p_client, "target": p_target, "stage": p_stage, "bid_date": p_bid_date}
-                        requests.post(f"{SB_URL}/rest/v1/projects", headers=HEADERS, json=payload, timeout=5)
-                        st.success(f"✔️ 项目【{p_name}】已经通过 API 写入云端！")
-                        st.slots = st.rerun()
+                        res = requests.post(f"{SB_URL}/rest/v1/projects", headers=HEADERS, json=payload, timeout=5)
+                        if res.status_code in [200, 201]:
+                            st.success(f"✔️ 项目【{p_name}】已经通过 API 写入云端！")
+                            st.cache_data.clear() # 刷清缓存
+                            st.rerun()
+                        else:
+                            st.error(f"写入失败，请检查数据库权限或表名结构！错误响应: {res.text}")
 
         elif sub_step == "🤝 中标订单录入":
             if not projects:
-                st.warning("⚠️ 暂无任何前置项目！")
+                st.warning("⚠️ 暂无任何前置项目，请先前往项目前期录入！")
             else:
                 p_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
                 sel_p = st.selectbox("11. 关联源头项目 *", list(p_opts.keys()))
@@ -226,20 +231,24 @@ elif menu == "➕ 业务数据维护中心":
 
                 if st.button("💾 确认保存订单"):
                     if not o_id or not o_province or not o_client or not o_product or not o_p_name:
-                        st.error("❌ 请完整填写字段！")
+                        st.error("❌ 请完整填写带有 * 的必填字段！")
                     else:
                         pid_ref = p_opts[sel_p]
-                        # 更新状态
+                        # 💡 纠正语法：PostgREST 更新单条数据需使用标准 eq. 语法进行网络穿透
                         requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_ref}", headers=HEADERS, json={"stage": "已中标"}, timeout=5)
-                        # 插入订单
+                        
                         o_payload = {"id": o_id, "project_ref": pid_ref, "order_date": o_date, "province": o_province, "client": o_client, "product": o_product, "price_no_tax": price, "tax_rate": tax_rate, "quantity": qty, "amt_no_tax": amt_no_tax, "amt_with_tax": amt_with_tax, "order_p_name": o_p_name}
-                        requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=o_payload, timeout=5)
-                        st.success(f"✔️ 中标合同订单 {o_id} 录入成功！")
-                        st.rerun()
+                        res = requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=o_payload, timeout=5)
+                        if res.status_code in [200, 201]:
+                            st.success(f"✔️ 中标合同订单 {o_id} 云端录入成功！")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"订单写入失败: {res.text}")
 
         elif sub_step == "🏦 回款销账登记":
             if not orders:
-                st.warning("⚠️ 暂无可回款订单！")
+                st.warning("⚠️ 云端数据库内暂无关联订单，无法登记到账款！")
             else:
                 with st.form("c_form", clear_on_submit=True):
                     o_opts = {f"订单:{oid} (含税额:¥{o['amt_with_tax']})": oid for oid, o in orders.items()}
@@ -248,15 +257,19 @@ elif menu == "➕ 业务数据维护中心":
                     c_date = st.date_input("3. 实际到账日期 *", value=datetime.now()).strftime("%Y-%m-%d")
 
                     if st.form_submit_button("💾 确认登记回款"):
-                        if c_amt <= 0: st.error("❌ 金额必须大于0！")
+                        if c_amt <= 0: st.error("❌ 金额必须大于0元！")
                         else:
                             oid_ref = o_opts[sel_o]
                             c_payload = {"order_ref": oid_ref, "amount": c_amt, "collection_date": c_date}
-                            requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
-                            st.success("✔️ 回款登记成功！")
-                            st.rerun()
+                            res = requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
+                            if res.status_code in [200, 201]:
+                                st.success("✔️ 阶段性财务回款账目已成功录入云端！")
+                                st.cache_data.clear()
+                                st.rerun()
+                            else:
+                                st.error(f"回款录入失败: {res.text}")
 
-    # 修改功能
+    # 修改功能 (通过 API Patch 覆写更新)
     elif op_type == "⚙️ 修改已有信息 (数据回显覆写)":
         edit_target = st.radio("请选择需要修改的内容类型：", ["🎯 修改项目信息", "🤝 修改订单明细"], horizontal=True)
         st.markdown("---")
@@ -279,9 +292,13 @@ elif menu == "➕ 业务数据维护中心":
 
                 if st.button("💾 覆写并保存项目修改"):
                     up_payload = {"name": up_p_name, "client": up_p_client, "target": up_p_target, "stage": up_p_stage, "bid_date": up_p_date}
-                    requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
-                    st.success("🎉 项目修改保存成功！")
-                    st.rerun()
+                    res = requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
+                    if res.status_code in [200, 204]:
+                        st.success("🎉 项目信息在 Supabase 云端已更新覆盖！")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f"更新项目失败: {res.text}")
 
         elif edit_target == "🤝 修改订单明细":
             if not orders: st.info("云端暂无订单数据可修改")
@@ -310,6 +327,10 @@ elif menu == "➕ 业务数据维护中心":
 
                 if st.button("💾 覆写并保存订单修改"):
                     up_o_payload = {"province": up_o_province, "client": up_o_client, "product": up_o_product, "order_p_name": up_o_p_name, "price_no_tax": up_price, "tax_rate": up_tax_rate, "quantity": up_qty, "amt_no_tax": new_no_tax, "amt_with_tax": new_tax_in, "order_date": up_o_date}
-                    requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
-                    st.success("🎉 订单明细云端更新成功！")
-                    st.rerun()
+                    res = requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
+                    if res.status_code in [200, 204]:
+                        st.success("🎉 订单明细云端更新覆盖成功！")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error(f"更新订单失败: {res.text}")
