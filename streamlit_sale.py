@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -11,9 +12,9 @@ st.set_page_config(page_title="通信销售全生命周期 Supabase 云工作台
 
 PROJECT_STAGES = ["线索", "机会点", "招投标", "已中标"]
 
-# 💡 个人年度 KPI 指标设定（你可以根据自己的实际考核目标随时修改这两个数字）
-ANNUAL_REVENUE_TARGET = 5000000.0   # 年度确认收入目标
-ANNUAL_COLLECTION_TARGET = 4500000.0 # 年度回款到账目标
+# 💡 个人年度 KPI 指标设定
+ANNUAL_REVENUE_TARGET = 5000000.0   
+ANNUAL_COLLECTION_TARGET = 4500000.0 
 
 # ==========================================
 # 1. 🚀 官方 API 高速安全驱动引擎
@@ -33,12 +34,12 @@ except Exception as e:
 
 @st.cache_data(ttl=1) # 1秒极速缓存
 def load_db_data():
-    """通过标准 HTTPS 接口，实时读取 Supabase 云数据库数据(包含全新的确收流水表)"""
+    """通过标准 HTTPS 接口，实时读取 Supabase 云数据库数据"""
     try:
         res_p = requests.get(f"{SB_URL}/rest/v1/projects?select=*", headers=HEADERS, timeout=5).json()
         res_o = requests.get(f"{SB_URL}/rest/v1/orders?select=*", headers=HEADERS, timeout=5).json()
         res_c = requests.get(f"{SB_URL}/rest/v1/collections?select=*", headers=HEADERS, timeout=5).json()
-        res_r = requests.get(f"{SB_URL}/rest/v1/revenues?select=*", headers=HEADERS, timeout=5).json() # 💡 增读新表
+        res_r = requests.get(f"{SB_URL}/rest/v1/revenues?select=*", headers=HEADERS, timeout=5).json() 
     except Exception as e:
         st.error(f"📡 连不上云数据库，网络握手超时！详情: {e}")
         return {}, {}, [], []
@@ -61,7 +62,7 @@ def load_db_data():
                 "tax_rate": float(row['tax_rate']), "quantity": int(row['quantity']),
                 "amt_no_tax": float(row['amt_no_tax']), "amt_with_tax": float(row['amt_with_tax']),
                 "p_ref": row.get('project_ref'), "order_p_name": row['order_p_name'], 
-                "collect_total": 0.0, "revenue_total": 0.0, # 💡 初始化确收累计字段
+                "collect_total": 0.0, "revenue_total": 0.0, 
                 "is_history": row.get('project_ref') is None 
             }
         
@@ -73,7 +74,7 @@ def load_db_data():
                 "date": str(row['collection_date']), "invoice_no": row.get('invoice_no', '-')
             })
 
-    revenues_list = [] # 💡 确收流水列表
+    revenues_list = [] 
     if isinstance(res_r, list):
         for row in res_r:
             revenues_list.append({
@@ -92,7 +93,6 @@ def load_db_data():
             if p_ref and p_ref in projects_dict:
                 projects_dict[p_ref]["collect_total"] += c["amount"]
 
-    # 💡 联动逻辑：核算每笔订单的累计到货确认收入
     for r in revenues_list:
         if r["o_ref"] in orders_dict:
             orders_dict[r["o_ref"]]["revenue_total"] += r["amount"]
@@ -104,7 +104,6 @@ st.cache_data.clear()
 projects, orders, collections, revenues = load_db_data()
 
 def get_quarter(date_str):
-    """根据日期字符串提取所属季度"""
     try:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         return dt.year, f"Q{(dt.month - 1) // 3 + 1}"
@@ -119,86 +118,61 @@ st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏 (核心修改：KPI完全以确收表为准)
+# 3. 页面 1: 业绩与KPI大屏
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
+    current_year = 2026 
     
-    current_year = 2026 # 锁定当前年度进行全盘考核
-    
-    # --- 1. 计算年度基础真实完成数据 ---
-    # 💡 核心修改：确认收入直接统计新确收流水表(revenues)里的真实确收时间与金额
     annual_revenue_done = sum(r["amount"] for r in revenues if datetime.strptime(r["date"], "%Y-%m-%d").year == current_year)
     annual_collection_done = sum(c["amount"] for c in collections if datetime.strptime(c["date"], "%Y-%m-%d").year == current_year)
     
-    # 算年度达成率
     rev_annual_rate = (annual_revenue_done / ANNUAL_REVENUE_TARGET) if ANNUAL_REVENUE_TARGET > 0 else 0.0
     col_annual_rate = (annual_collection_done / ANNUAL_COLLECTION_TARGET) if ANNUAL_COLLECTION_TARGET > 0 else 0.0
 
-    # --- 2. 渲染顶部【全年度静态 KPI 达成看板】 ---
     st.markdown(f"### 📅 {current_year}年度核心 KPI 战略总览")
-    
     kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
     kpi_col1.metric("年度确认收入目标", f"¥{ANNUAL_REVENUE_TARGET:,.2f}")
     kpi_col2.metric("当前已确收(已到货)", f"¥{annual_revenue_done:,.2f}", f"已达成 {rev_annual_rate*100:.1f}%")
     kpi_col3.metric("年度回款到账目标", f"¥{ANNUAL_COLLECTION_TARGET:,.2f}")
     kpi_col4.metric("全年度累计到账回款", f"¥{annual_collection_done:,.2f}", f"已达成 {col_annual_rate*100:.1f}%")
     
-    # 可视化年度进度条
     st.markdown("**🎯 年度确收 KPI 进度:**")
     st.progress(min(1.0, rev_annual_rate))
     st.markdown("**🏦 年度回款 KPI 进度:**")
     st.progress(min(1.0, col_annual_rate))
-    
     st.markdown("---")
 
-    # --- 3. 渲染下半部分【季度 KPI 自由筛选追踪面板】 ---
     st.markdown("### 🔍 季度 KPI 财务战果穿透查询")
-    
-    selected_q = st.selectbox(
-        "请选择需要复盘的特定季度：", 
-        [f"{current_year}年 Q1 (1-3月)", f"{current_year}年 Q2 (4-6月)", f"{current_year}年 Q3 (7-9月)", f"{current_year}年 Q4 (10-12月)"],
-        index=2
-    )
+    selected_q = st.selectbox("请选择需要复盘的特定季度：", [f"{current_year}年 Q1 (1-3月)", f"{current_year}年 Q2 (4-6月)", f"{current_year}年 Q3 (7-9月)", f"{current_year}年 Q4 (10-12月)"], index=2)
     target_q_code = selected_q.split(" ")[1]
 
-    # 💡 季度穿透：也去读确收流水表里的日期
     q_revenue_done = 0.0
     q_collection_done = 0.0
-    
     for r in revenues:
         y, q = get_quarter(r["date"])
-        if y == current_year and q == target_q_code:
-            q_revenue_done += r["amount"]
-                
+        if y == current_year and q == target_q_code: q_revenue_done += r["amount"]
     for c in collections:
         y, q = get_quarter(c["date"])
-        if y == current_year and q == target_q_code:
-            q_collection_done += c["amount"]
+        if y == current_year and q == target_q_code: q_collection_done += c["amount"]
 
-    # 渲染季度指标结果
     q_box1, q_box2, q_box3 = st.columns(3)
     q_box1.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #3498db; border-radius:4px;'><h4>📌 当前考察季度</h4><h2 style='color:#3498db;'>{selected_q}</h2></div>", unsafe_allow_html=True)
-    q_box2.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #2ecc71; border-radius:4px;'><h4>📈 该季度确认收入（到货核销额）</h4><h2 style='color:#2ecc71;'>¥{q_revenue_done:,.2f}</h2></div>", unsafe_allow_html=True)
+    q_box2.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #2ecc71; border-radius:4px;'><h4>📈 该季度确认收入</h4><h2 style='color:#2ecc71;'>¥{q_revenue_done:,.2f}</h2></div>", unsafe_allow_html=True)
     q_box3.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #9b59b6; border-radius:4px;'><h4>🏦 该季度实际催收到账回款</h4><h2 style='color:#9b59b6;'>¥{q_collection_done:,.2f}</h2></div>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     if q_revenue_done > 0 or q_collection_done > 0:
-        fig_q = px.bar(
-            x=["季度确认收入数据", "季度回款数据"], y=[q_revenue_done, q_collection_done],
-            color=["确收", "回款"], text_auto='.2f',
-            labels={'x': '财务考评参数', 'y': '金额 (元)'}, title=f"📊 {selected_q} 确收与回款配比直方图"
-        )
+        fig_q = px.bar(x=["季度确认收入数据", "季度回款数据"], y=[q_revenue_done, q_collection_done], color=["确收", "回款"], text_auto='.2f', labels={'x': '财务考评参数', 'y': '金额 (元)'}, title=f"📊 {selected_q} 确收与回款配比直方图")
         st.plotly_chart(fig_q, use_container_width=True)
     else:
         st.info(f"💡 提示：您选择的 {selected_q} 内暂时没有产生到货确收或回款流水。")
 
 # ==========================================
-# 4. 页面 2: 综合业务台账 (升级：台账拉通展示确收进度)
+# 4. 页面 2: 综合业务台账
 # ==========================================
 elif menu == "📝 综合业务台账":
     st.title("📝 综合业务拉通明细台账")
-    
     st.markdown("### 🎛️ 数据中心快速过滤器")
     f_col1, f_col2, f_col3 = st.columns(3)
     
@@ -213,7 +187,6 @@ elif menu == "📝 综合业务台账":
     date_range = f_col3.date_input("📅 筛选接单下发日期范围：", value=(start_of_year, today))
     st.markdown("---")
 
-    # --- 模块 B：框架项目看板 ---
     st.subheader("🎯 前期售前 / 框架项目看板")
     project_rows = []
     for pid, p in projects.items():
@@ -222,19 +195,13 @@ elif menu == "📝 综合业务台账":
         warning_status = "✅ 安全范围"
         if ratio >= 1.0: warning_status = "🚨 严重超标！已爆框架"
         elif ratio >= 0.8: warning_status = "⚠️ 额度告急！超过80%"
-            
-        project_rows.append({
-            "项目ID": p["id"], "项目/框架名称": p["name"], "客户简称": p["client"], "框架标的总额": p["target"],
-            "已下正式订单含税总额": p["amt_with_tax_total"], "框架额度消耗比例": f"{ratio*100:.1f}%",
-            "框架安全水位预警": warning_status, "开标/创建日期": p["bid_date"], "当前状态": p["stage"]
-        })
+        project_rows.append({"项目ID": p["id"], "项目/框架名称": p["name"], "客户简称": p["client"], "框架标的总额": p["target"], "已下正式订单含税总额": p["amt_with_tax_total"], "框架额度消耗比例": f"{ratio*100:.1f}%", "框架安全水位预警": warning_status, "开标/创建日期": p["bid_date"], "当前状态": p["stage"]})
     if project_rows:
         df_p_view = pd.DataFrame(project_rows)
         st.dataframe(df_p_view.style.map(lambda v: "background-color: #ffcccc; color: #cc0000; font-weight: bold;" if "🚨" in str(v) else ("background-color: #fff3cd; color: #856404; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["框架安全水位预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
-    # --- 模块 C：正式中标合同订单明细表 ---
     st.subheader("🤝 已中标正式订单及【到货确收】追踪明细表")
     order_rows = []
     for oid, o in orders.items():
@@ -248,31 +215,23 @@ elif menu == "📝 综合业务台账":
         except: pass
             
         uncollected = max(0.0, o["amt_with_tax"] - o["collect_total"])
-        unrevenue = max(0.0, o["amt_with_tax"] - o["revenue_total"]) # 💡 计算尚未确收金额
-        
-        order_rows.append({
-            "订单编号": o["id"], "订单下发日期": o["date"], "区域省份": o["province"], "客户简称": o["client"], "订购产品明细": o["product"],
-            "接单含税金额": o["amt_with_tax"], "订单项目名称": o["order_p_name"], 
-            "💡 累计已确认收入": o["revenue_total"], "⏳ 尚未收货未确收": unrevenue, # 💡 拉通展示确收数据
-            "累计已回款": o["collect_total"], "待追收尾款": uncollected, "关联源头框架项目": related_p_name 
-        })
+        unrevenue = max(0.0, o["amt_with_tax"] - o["revenue_total"]) 
+        order_rows.append({"订单编号": o["id"], "订单下发日期": o["date"], "区域省份": o["province"], "客户简称": o["client"], "订购产品明细": o["product"], "接单含税金额": o["amt_with_tax"], "订单项目名称": o["order_p_name"], "💡 累计已确认收入": o["revenue_total"], "⏳ 尚未收货未确收": unrevenue, "累计已回款": o["collect_total"], "待追收尾款": uncollected, "关联源头框架项目": related_p_name})
         
     if order_rows:
         df_o_view = pd.DataFrame(order_rows)
         column_order = ["订单编号", "订单下发日期", "区域省份", "客户简称", "订购产品明细", "接单含税金额", "💡 累计已确认收入", "⏳ 尚未收货未确收", "累计已回款", "待追收尾款", "关联源头框架项目"]
         df_o_view = df_o_view.reindex(columns=column_order)
-        
         s1, s2, s3 = st.columns(3)
         s1.metric("当前筛选正式接单额", f"¥{df_o_view['接单含税金额'].sum():,.2f}")
         s2.metric("当前已开网收货确收额", f"¥{df_o_view['💡 累计已确认收入'].sum():,.2f}")
         s3.metric("整个大盘待催收尾款", f"¥{df_o_view['待追收尾款'].sum():,.2f}")
-        
         st.dataframe(df_o_view, use_container_width=True, hide_index=True)
     else:
         st.info("选定的日期范围内暂无符合过滤条件的正式订单数据")
 
 # ==========================================
-# 5. 页面 3: 业务数据维护中心 (核心升级：增加到货确收免痕迹登记功能)
+# 5. 页面 3: 业务数据维护中心 (集成多单号智能分摊核销引擎)
 # ==========================================
 elif menu == "➕ 业务数据维护中心":
     st.title("🛠️ 业务数据全生命周期维护中心")
@@ -280,7 +239,7 @@ elif menu == "➕ 业务数据维护中心":
     st.markdown("---")
 
     if op_type == "🆕 录入全新数据":
-        sub_step = st.radio("请选择录入的业务阶段：", ["🎯 项目前期录入", "🤝 中标订单录入", "📈 确认收入到货登记", "🏦 回款销账登记"], horizontal=True) # 💡 增加选项
+        sub_step = st.radio("请选择录入的业务阶段：", ["🎯 项目前期录入", "🤝 中标订单录入", "📈 确认收入到货登记", "🏦 回款销账登记"], horizontal=True) 
         st.markdown("---")
 
         if sub_step == "🎯 项目前期录入":
@@ -297,8 +256,7 @@ elif menu == "➕ 业务数据维护中心":
                         new_id = f"PRJ{int(datetime.now().timestamp())}"
                         payload = {"id": new_id, "name": p_name, "client": p_client, "target": p_target, "stage": p_stage, "bid_date": p_bid_date}
                         res = requests.post(f"{SB_URL}/rest/v1/projects", headers=HEADERS, json=payload, timeout=5)
-                        if res.status_code in [200, 201]:
-                            st.success(f"✔️ 框架项目【{p_name}】已经成功同步写入云端！"); st.cache_data.clear(); st.rerun()
+                        if res.status_code in [200, 201]: st.success(f"✔️ 框架项目【{p_name}】已经成功同步写入云端！"); st.cache_data.clear(); st.rerun()
 
         elif sub_step == "🤝 中标订单录入":
             if not projects: st.warning("⚠️ 暂无任何前置项目，请先完成【项目前期录入】！")
@@ -328,56 +286,92 @@ elif menu == "➕ 业务数据维护中心":
                         res = requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=o_payload, timeout=5)
                         if res.status_code in [200, 201]: st.success(f"✔️ 中标正式合同订单 {o_id} 云端同步成功！"); st.cache_data.clear(); st.rerun()
 
-        # 💡 核心新增：【📈 确认收入到货登记表单】
         elif sub_step == "📈 确认收入到货登记":
-            if not orders:
-                st.warning("⚠️ 系统内暂无订单，请先录入正式中标订单。")
+            if not orders: st.warning("⚠️ 系统内暂无订单。")
             else:
-                st.markdown("### 📦 客户收货确认收入(到货核销)流登记")
                 with st.form("r_form", clear_on_submit=True):
                     o_opts = {f"订单:{oid} (接单含税总额:¥{o['amt_with_tax']} | 已确收:¥{o['revenue_total']})": oid for oid, o in orders.items()}
-                    sel_o = st.selectbox("1. 选择要登记收货确收的客户订单号 *", list(o_opts.keys()))
-                    oid_final = o_opts[sel_o]
-                    
-                    r_amt = st.number_input("2. 本次客户签收/开网/实际确认收入金额 (元) *", min_value=0.0)
+                    sel_o = st.selectbox("1. 选择要登记收货确收的客户订单号 *", list(o_opts.keys())); oid_final = o_opts[sel_o]
+                    r_amt = st.number_input("2. 本次客户签收/确认收入金额 (元) *", min_value=0.0)
                     r_date = st.date_input("3. 实际确认收入到货日期 *", value=datetime.now()).strftime("%Y-%m-%d")
-                    
                     if st.form_submit_button("💾 确认登记确收收入"):
                         if r_amt <= 0: st.error("❌ 确收金额需大于0元！")
                         else:
                             r_payload = {"order_ref": oid_final, "amount": r_amt, "revenue_date": r_date}
                             res = requests.post(f"{SB_URL}/rest/v1/revenues", headers=HEADERS, json=r_payload, timeout=5)
-                            if res.status_code in [200, 201]:
-                                st.success("🎉 收货确收流水同步安全入库！订单数据未受任何修改痕迹污染！")
-                                st.cache_data.clear(); st.rerun()
-                            else: st.error(f"确收写入失败: {res.text}")
+                            if res.status_code in [200, 201]: st.success("🎉 确收成功！"); st.cache_data.clear(); st.rerun()
 
+        # 🏦 回款销账（已全面升级合并订单拆分算法）
         elif sub_step == "🏦 回款销账登记":
-            is_manual_order = st.checkbox("⏳ 登记多年前的历史老订单回款")
+            is_manual_order = st.checkbox("⏳ 登记多年前的历史老订单回款（或非下拉框的自定义单号拼接）")
+            st.info("💡 技巧：如果运营商一笔钱结算了多个订单，请勾选上方开关，在单号框中用【英文逗号】隔开多个单号录入（如：`单号A,单号B`），系统会自动按欠款比例拆分流水核销！")
+            
             with st.form("c_form", clear_on_submit=True):
                 if not is_manual_order:
                     if not orders: st.warning("⚠️ 系统内暂无订单。"); st.form_submit_button("不可提交", disabled=True)
                     else:
-                        o_opts = {f"订单:{oid} (系统含税额:¥{o['amt_with_tax']})": oid for oid, o in orders.items()}
+                        o_opts = {f"订单:{oid} (当前待收尾款:¥{o['amt_with_tax'] - o['collect_total']})": oid for oid, o in orders.items()}
                         sel_o = st.selectbox("1. 选择要核销的客户订单号 *", list(o_opts.keys())); oid_final = o_opts[sel_o]
-                else: oid_final = st.text_input("1. 手动精确输入历史客户订单号 *")
+                else: 
+                    oid_final = st.text_input("1. 手动精确输入订单号 * (支持多单号逗号隔开，如: ORDER1,ORDER2)")
 
-                c_amt = st.number_input("2. 本次财务实际到账回款额 (元) *", min_value=0.0)
+                c_amt = st.number_input("2. 本次财务实际到账总回款额 (元) *", min_value=0.0)
                 c_date = st.date_input("3. 实际回款进账日期 *", value=datetime.now()).strftime("%Y-%m-%d")
                 c_invoice = st.text_input("4. 关联销账发票号 / 财务凭证号 (选填)")
 
                 if st.form_submit_button("💾 确认登记回款"):
-                    cleaned_oid = str(oid_final).strip()
-                    if not cleaned_oid: st.error("❌ 客户订单号不能为空！")
-                    elif c_amt <= 0:  st.error("❌ 回款金额需大于0元！")
+                    raw_oid_input = str(oid_final).strip()
+                    if not raw_oid_input: st.error("❌ 订单号不能为空！")
+                    elif c_amt <= 0: st.error("❌ 回款金额需大于0元！")
                     else:
-                        if is_manual_order and (cleaned_oid not in orders):
-                            hedge_payload = {"id": cleaned_oid, "project_ref": None, "order_date": c_date, "province": "历史老账归档区", "client": "历史长账龄客户", "product": "跨年历史账目结转款", "price_no_tax": c_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": c_amt, "amt_with_tax": c_amt, "order_p_name": "多年前老订单挂账"}
-                            requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=hedge_payload, timeout=5)
+                        # 💡 核心平摊引擎：以英文逗号分割多订单号进行解析
+                        target_orders = [x.strip() for x in raw_oid_input.split(",") if x.strip()]
                         
-                        c_payload = {"order_ref": cleaned_oid, "amount": c_amt, "collection_date": c_date, "invoice_no": c_invoice if c_invoice else "-"}
-                        res = requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
-                        if res.status_code in [200, 201]: st.success("🎉 数据安全入库！"); st.cache_data.clear(); st.rerun()
+                        if len(target_orders) <= 1:
+                            # --- 场景 A：普通的单订单核销逻辑（保持原样） ---
+                            single_oid = target_orders[0]
+                            if is_manual_order and (single_oid not in orders):
+                                hedge_payload = {"id": single_oid, "project_ref": None, "order_date": c_date, "province": "历史老账归档区", "client": "历史长账龄客户", "product": "跨年历史账目结转款", "price_no_tax": c_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": c_amt, "amt_with_tax": c_amt, "order_p_name": "多年前老订单挂账"}
+                                requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=hedge_payload, timeout=5)
+                            
+                            c_payload = {"order_ref": single_oid, "amount": c_amt, "collection_date": c_date, "invoice_no": c_invoice if c_invoice else "-"}
+                            requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
+                        else:
+                            # --- 场景 B：运营商复合合并账单【智能按欠款比例分摊】 ---
+                            # 1. 抓出这几个单子各自在系统内的剩余欠款
+                            debt_dict = {}
+                            total_debt = 0.0
+                            for target_id in target_orders:
+                                if target_id in orders:
+                                    current_debt = max(0.0, orders[target_id]["amt_with_tax"] - orders[target_id]["collect_total"])
+                                else:
+                                    current_debt = 0.0 # 不在系统里的默认为0
+                                debt_dict[target_id] = current_debt
+                                total_debt += current_debt
+                            
+                            # 2. 执行智能比例剪裁或均摊算法
+                            remaining_pool = c_amt
+                            for idx, target_id in enumerate(target_orders):
+                                if idx == len(target_orders) - 1:
+                                    # 最后一个订单拿走余额，防止浮点数精度丢失
+                                    split_amt = remaining_pool
+                                else:
+                                    if total_debt > 0:
+                                        split_amt = round(c_amt * (debt_dict[target_id] / total_debt), 2)
+                                    else:
+                                        split_amt = round(c_amt / len(target_orders), 2) # 若都无欠款则平均平摊
+                                    remaining_pool -= split_amt
+                                
+                                # 3. 如果单子属于不在系统内的陈年老账，静默建立平衡订单
+                                if target_id not in orders:
+                                    requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json={"id": target_id, "project_ref": None, "order_date": c_date, "province": "合并结算归档区", "client": "运营商批量结算", "product": "历史批量并单核销款", "price_no_tax": split_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": split_amt, "amt_with_tax": split_amt, "order_p_name": "批量历史合并挂账"}, timeout=5)
+                                
+                                # 4. 精准打入切分后的单独回款记录至 Supabase 
+                                each_payload = {"order_ref": target_id, "amount": split_amt, "collection_date": c_date, "invoice_no": f"{c_invoice}(合并结算拆分)" if c_invoice else "合并拆分流水"}
+                                requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=each_payload, timeout=5)
+                        
+                        st.success("🎉 运营商多单合并账目已成功通过引擎智能拆分并平摊核销入库！")
+                        st.cache_data.clear(); st.rerun()
 
     # 修改功能
     elif op_type == "⚙️ 修改已有信息 (数据回显覆写)":
