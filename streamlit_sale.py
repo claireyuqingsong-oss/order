@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -13,8 +12,8 @@ st.set_page_config(page_title="通信销售全生命周期 Supabase 云工作台
 PROJECT_STAGES = ["线索", "机会点", "招投标", "已中标"]
 
 # 💡 个人年度 KPI 指标设定（你可以根据自己的实际考核目标随时修改这两个数字）
-ANNUAL_REVENUE_TARGET = 5000000.0   # 👈 你的年度确认收入(含税订单)目标：500万
-ANNUAL_COLLECTION_TARGET = 4500000.0 # 👈 你的年度回款到账目标：450万
+ANNUAL_REVENUE_TARGET = 5000000.0   # 年度确认收入目标
+ANNUAL_COLLECTION_TARGET = 4500000.0 # 年度回款到账目标
 
 # ==========================================
 # 1. 🚀 官方 API 高速安全驱动引擎
@@ -34,14 +33,15 @@ except Exception as e:
 
 @st.cache_data(ttl=1) # 1秒极速缓存
 def load_db_data():
-    """通过 443 端口的标准 HTTPS 接口，实时读取 Supabase 云数据库数据"""
+    """通过标准 HTTPS 接口，实时读取 Supabase 云数据库数据(包含全新的确收流水表)"""
     try:
         res_p = requests.get(f"{SB_URL}/rest/v1/projects?select=*", headers=HEADERS, timeout=5).json()
         res_o = requests.get(f"{SB_URL}/rest/v1/orders?select=*", headers=HEADERS, timeout=5).json()
         res_c = requests.get(f"{SB_URL}/rest/v1/collections?select=*", headers=HEADERS, timeout=5).json()
+        res_r = requests.get(f"{SB_URL}/rest/v1/revenues?select=*", headers=HEADERS, timeout=5).json() # 💡 增读新表
     except Exception as e:
         st.error(f"📡 连不上云数据库，网络握手超时！详情: {e}")
-        return {}, {}, []
+        return {}, {}, [], []
 
     projects_dict = {}
     if isinstance(res_p, list):
@@ -60,7 +60,8 @@ def load_db_data():
                 "client": row['client'], "product": row['product'], "price_no_tax": float(row['price_no_tax']),
                 "tax_rate": float(row['tax_rate']), "quantity": int(row['quantity']),
                 "amt_no_tax": float(row['amt_no_tax']), "amt_with_tax": float(row['amt_with_tax']),
-                "p_ref": row.get('project_ref'), "order_p_name": row['order_p_name'], "collect_total": 0.0,
+                "p_ref": row.get('project_ref'), "order_p_name": row['order_p_name'], 
+                "collect_total": 0.0, "revenue_total": 0.0, # 💡 初始化确收累计字段
                 "is_history": row.get('project_ref') is None 
             }
         
@@ -68,10 +69,15 @@ def load_db_data():
     if isinstance(res_c, list):
         for row in res_c:
             collections_list.append({
-                "o_ref": row['order_ref'], 
-                "amount": float(row['amount']), 
-                "date": str(row['collection_date']),
-                "invoice_no": row.get('invoice_no', '-')
+                "o_ref": row['order_ref'], "amount": float(row['amount']), 
+                "date": str(row['collection_date']), "invoice_no": row.get('invoice_no', '-')
+            })
+
+    revenues_list = [] # 💡 确收流水列表
+    if isinstance(res_r, list):
+        for row in res_r:
+            revenues_list.append({
+                "o_ref": row['order_ref'], "amount": float(row['amount']), "date": str(row['revenue_date'])
             })
         
     # 交叉核算多表联动财务逻辑
@@ -86,11 +92,16 @@ def load_db_data():
             if p_ref and p_ref in projects_dict:
                 projects_dict[p_ref]["collect_total"] += c["amount"]
 
-    return projects_dict, orders_dict, collections_list
+    # 💡 联动逻辑：核算每笔订单的累计到货确认收入
+    for r in revenues_list:
+        if r["o_ref"] in orders_dict:
+            orders_dict[r["o_ref"]]["revenue_total"] += r["amount"]
+
+    return projects_dict, orders_dict, collections_list, revenues_list
 
 # 强制清空本地缓存以加载最新公网云数据
 st.cache_data.clear()
-projects, orders, collections = load_db_data()
+projects, orders, collections, revenues = load_db_data()
 
 def get_quarter(date_str):
     """根据日期字符串提取所属季度"""
@@ -108,7 +119,7 @@ st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏 (核心修改：增加年/季KPI考核体系)
+# 3. 页面 1: 业绩与KPI大屏 (核心修改：KPI完全以确收表为准)
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
@@ -116,7 +127,8 @@ if menu == "📊 业绩与KPI大屏":
     current_year = 2026 # 锁定当前年度进行全盘考核
     
     # --- 1. 计算年度基础真实完成数据 ---
-    annual_revenue_done = sum(o["amt_with_tax"] for o in orders.values() if not o["is_history"] and datetime.strptime(o["date"], "%Y-%m-%d").year == current_year)
+    # 💡 核心修改：确认收入直接统计新确收流水表(revenues)里的真实确收时间与金额
+    annual_revenue_done = sum(r["amount"] for r in revenues if datetime.strptime(r["date"], "%Y-%m-%d").year == current_year)
     annual_collection_done = sum(c["amount"] for c in collections if datetime.strptime(c["date"], "%Y-%m-%d").year == current_year)
     
     # 算年度达成率
@@ -128,7 +140,7 @@ if menu == "📊 业绩与KPI大屏":
     
     kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
     kpi_col1.metric("年度确认收入目标", f"¥{ANNUAL_REVENUE_TARGET:,.2f}")
-    kpi_col2.metric("当前已确收(含税订单)", f"¥{annual_revenue_done:,.2f}", f"已达成 {rev_annual_rate*100:.1f}%")
+    kpi_col2.metric("当前已确收(已到货)", f"¥{annual_revenue_done:,.2f}", f"已达成 {rev_annual_rate*100:.1f}%")
     kpi_col3.metric("年度回款到账目标", f"¥{ANNUAL_COLLECTION_TARGET:,.2f}")
     kpi_col4.metric("全年度累计到账回款", f"¥{annual_collection_done:,.2f}", f"已达成 {col_annual_rate*100:.1f}%")
     
@@ -143,23 +155,21 @@ if menu == "📊 业绩与KPI大屏":
     # --- 3. 渲染下半部分【季度 KPI 自由筛选追踪面板】 ---
     st.markdown("### 🔍 季度 KPI 财务战果穿透查询")
     
-    # 季度切换选择器
     selected_q = st.selectbox(
         "请选择需要复盘的特定季度：", 
         [f"{current_year}年 Q1 (1-3月)", f"{current_year}年 Q2 (4-6月)", f"{current_year}年 Q3 (7-9月)", f"{current_year}年 Q4 (10-12月)"],
-        index=2 # 默认停留在当前Q3季度
+        index=2
     )
-    target_q_code = selected_q.split(" ")[1] # 提取出 "Q1", "Q2" 等标签
+    target_q_code = selected_q.split(" ")[1]
 
-    # 抽取选定季度的具体数据
+    # 💡 季度穿透：也去读确收流水表里的日期
     q_revenue_done = 0.0
     q_collection_done = 0.0
     
-    for o in orders.values():
-        if not o["is_history"]:
-            y, q = get_quarter(o["date"])
-            if y == current_year and q == target_q_code:
-                q_revenue_done += o["amt_with_tax"]
+    for r in revenues:
+        y, q = get_quarter(r["date"])
+        if y == current_year and q == target_q_code:
+            q_revenue_done += r["amount"]
                 
     for c in collections:
         y, q = get_quarter(c["date"])
@@ -169,26 +179,22 @@ if menu == "📊 业绩与KPI大屏":
     # 渲染季度指标结果
     q_box1, q_box2, q_box3 = st.columns(3)
     q_box1.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #3498db; border-radius:4px;'><h4>📌 当前考察季度</h4><h2 style='color:#3498db;'>{selected_q}</h2></div>", unsafe_allow_html=True)
-    q_box2.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #2ecc71; border-radius:4px;'><h4>📈 该季度确认收入（订单总额）</h4><h2 style='color:#2ecc71;'>¥{q_revenue_done:,.2f}</h2></div>", unsafe_allow_html=True)
+    q_box2.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #2ecc71; border-radius:4px;'><h4>📈 该季度确认收入（到货核销额）</h4><h2 style='color:#2ecc71;'>¥{q_revenue_done:,.2f}</h2></div>", unsafe_allow_html=True)
     q_box3.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #9b59b6; border-radius:4px;'><h4>🏦 该季度实际催收到账回款</h4><h2 style='color:#9b59b6;'>¥{q_collection_done:,.2f}</h2></div>", unsafe_allow_html=True)
 
-    # 季度财务构成可视化
     st.markdown("<br>", unsafe_allow_html=True)
     if q_revenue_done > 0 or q_collection_done > 0:
         fig_q = px.bar(
-            x=["季度确认收入数据", "季度回款数据"], 
-            y=[q_revenue_done, q_collection_done],
-            color=["确收", "回款"],
-            text_auto='.2f',
-            labels={'x': '财务考评参数', 'y': '金额 (元)'},
-            title=f"📊 {selected_q} 确收与回款配比直方图"
+            x=["季度确认收入数据", "季度回款数据"], y=[q_revenue_done, q_collection_done],
+            color=["确收", "回款"], text_auto='.2f',
+            labels={'x': '财务考评参数', 'y': '金额 (元)'}, title=f"📊 {selected_q} 确收与回款配比直方图"
         )
         st.plotly_chart(fig_q, use_container_width=True)
     else:
-        st.info(f"💡 提示：您选择的 {selected_q} 内暂时没有产生录入的订单或回款流水。")
+        st.info(f"💡 提示：您选择的 {selected_q} 内暂时没有产生到货确收或回款流水。")
 
 # ==========================================
-# 4. 页面 2: 综合业务台账 
+# 4. 页面 2: 综合业务台账 (升级：台账拉通展示确收进度)
 # ==========================================
 elif menu == "📝 综合业务台账":
     st.title("📝 综合业务拉通明细台账")
@@ -204,112 +210,69 @@ elif menu == "📝 综合业务台账":
     
     today = date.today()
     start_of_year = date(today.year, 1, 1)
-    date_range = f_col3.date_input(
-        "📅 筛选订单签署日期范围：",
-        value=(start_of_year, today),
-        help="可以自由在手机/电脑上框选特定的历史时间段进行看账"
-    )
+    date_range = f_col3.date_input("📅 筛选接单下发日期范围：", value=(start_of_year, today))
     st.markdown("---")
 
     # --- 模块 B：框架项目看板 ---
     st.subheader("🎯 前期售前 / 框架项目看板")
     project_rows = []
     for pid, p in projects.items():
-        if selected_project != "全部项目" and p["name"] != selected_project:
-            continue
-            
+        if selected_project != "全部项目" and p["name"] != selected_project: continue
         ratio = (p["amt_with_tax_total"] / p["target"]) if p["target"] > 0 else 0.0
-        
         warning_status = "✅ 安全范围"
-        if ratio >= 1.0:
-            warning_status = "🚨 严重超标！已爆框架"
-        elif ratio >= 0.8:
-            warning_status = "⚠️ 额度告急！超过80%"
+        if ratio >= 1.0: warning_status = "🚨 严重超标！已爆框架"
+        elif ratio >= 0.8: warning_status = "⚠️ 额度告急！超过80%"
             
         project_rows.append({
-            "项目ID": p["id"],
-            "项目/框架名称": p["name"],
-            "客户简称": p["client"],
-            "框架标的总额": p["target"],
-            "已下正式订单含税总额": p["amt_with_tax_total"],
-            "框架额度消耗比例": f"{ratio*100:.1f}%",
-            "框架安全水位预警": warning_status,
-            "开标/创建日期": p["bid_date"],
-            "当前状态": p["stage"]
+            "项目ID": p["id"], "项目/框架名称": p["name"], "客户简称": p["client"], "框架标的总额": p["target"],
+            "已下正式订单含税总额": p["amt_with_tax_total"], "框架额度消耗比例": f"{ratio*100:.1f}%",
+            "框架安全水位预警": warning_status, "开标/创建日期": p["bid_date"], "当前状态": p["stage"]
         })
-        
     if project_rows:
         df_p_view = pd.DataFrame(project_rows)
-        st.dataframe(
-            df_p_view.style.map(
-                lambda v: "background-color: #ffcccc; color: #cc0000; font-weight: bold;" if "🚨" in str(v) 
-                else ("background-color: #fff3cd; color: #856404; font-weight: bold;" if "⚠️" in str(v) else ""),
-                subset=["框架安全水位预警"]
-            ), 
-            use_container_width=True, hide_index=True
-        )
-    else:
-        st.info("暂无符合筛选条件的项目框架信息")
+        st.dataframe(df_p_view.style.map(lambda v: "background-color: #ffcccc; color: #cc0000; font-weight: bold;" if "🚨" in str(v) else ("background-color: #fff3cd; color: #856404; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["框架安全水位预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br><br>", unsafe_allow_html=True)
 
     # --- 模块 C：正式中标合同订单明细表 ---
-    st.subheader("🤝 已中标正式订单明细表")
+    st.subheader("🤝 已中标正式订单及【到货确收】追踪明细表")
     order_rows = []
     for oid, o in orders.items():
         related_p_name = projects[o["p_ref"]]["name"] if o["p_ref"] and o["p_ref"] in projects else "历史老账/无需补录项目"
-        
-        if selected_project != "全部项目" and related_p_name != selected_project:
-            continue
-        if selected_province != "全部省份" and o["province"] != selected_province:
-            continue
-            
+        if selected_project != "全部项目" and related_p_name != selected_project: continue
+        if selected_province != "全部省份" and o["province"] != selected_province: continue
         try:
             o_date_obj = datetime.strptime(o["date"], "%Y-%m-%d").date()
             if isinstance(date_range, tuple) and len(date_range) == 2:
-                if not (date_range[0] <= o_date_obj <= date_range[1]):
-                    continue
-        except:
-            pass
+                if not (date_range[0] <= o_date_obj <= date_range[1]): continue
+        except: pass
             
         uncollected = max(0.0, o["amt_with_tax"] - o["collect_total"])
+        unrevenue = max(0.0, o["amt_with_tax"] - o["revenue_total"]) # 💡 计算尚未确收金额
+        
         order_rows.append({
-            "订单编号": o["id"],
-            "订单下发日期": o["date"],
-            "区域省份": o["province"],
-            "客户简称": o["client"],
-            "订购产品明细": o["product"],
-            "单价(不含税)": o["price_no_tax"],
-            "税率": f"{o['tax_rate']*100:.0f}%",
-            "数量": o["quantity"],
-            "不含税总额": o["amt_no_tax"],
-            "订单含税金额": o["amt_with_tax"],
-            "订单项目名称": o["order_p_name"],
-            "累计已回款": o["collect_total"],
-            "待追收尾款": uncollected,
-            "关联源头框架项目": related_p_name 
+            "订单编号": o["id"], "订单下发日期": o["date"], "区域省份": o["province"], "客户简称": o["client"], "订购产品明细": o["product"],
+            "接单含税金额": o["amt_with_tax"], "订单项目名称": o["order_p_name"], 
+            "💡 累计已确认收入": o["revenue_total"], "⏳ 尚未收货未确收": unrevenue, # 💡 拉通展示确收数据
+            "累计已回款": o["collect_total"], "待追收尾款": uncollected, "关联源头框架项目": related_p_name 
         })
         
     if order_rows:
         df_o_view = pd.DataFrame(order_rows)
-        column_order = [
-            "订单编号", "订单下发日期", "区域省份", "客户简称", "订购产品明细", 
-            "单价(不含税)", "税率", "数量", "不含税总额", "订单含税金额", 
-            "订单项目名称", "累计已回款", "待追收尾款", "关联源头框架项目"
-        ]
+        column_order = ["订单编号", "订单下发日期", "区域省份", "客户简称", "订购产品明细", "接单含税金额", "💡 累计已确认收入", "⏳ 尚未收货未确收", "累计已回款", "待追收尾款", "关联源头框架项目"]
         df_o_view = df_o_view.reindex(columns=column_order)
         
         s1, s2, s3 = st.columns(3)
-        s1.metric("当前显示时间段订单", f"{len(df_o_view)} 笔")
-        s2.metric("当前显示段含税额", f"¥{df_o_view['订单含税金额'].sum():,.2f}")
-        s3.metric("当前显示段待收总尾款", f"¥{df_o_view['待追收尾款'].sum():,.2f}")
+        s1.metric("当前筛选正式接单额", f"¥{df_o_view['接单含税金额'].sum():,.2f}")
+        s2.metric("当前已开网收货确收额", f"¥{df_o_view['💡 累计已确认收入'].sum():,.2f}")
+        s3.metric("整个大盘待催收尾款", f"¥{df_o_view['待追收尾款'].sum():,.2f}")
         
         st.dataframe(df_o_view, use_container_width=True, hide_index=True)
     else:
         st.info("选定的日期范围内暂无符合过滤条件的正式订单数据")
 
 # ==========================================
-# 5. 页面 3: 业务数据维护中心
+# 5. 页面 3: 业务数据维护中心 (核心升级：增加到货确收免痕迹登记功能)
 # ==========================================
 elif menu == "➕ 业务数据维护中心":
     st.title("🛠️ 业务数据全生命周期维护中心")
@@ -317,7 +280,7 @@ elif menu == "➕ 业务数据维护中心":
     st.markdown("---")
 
     if op_type == "🆕 录入全新数据":
-        sub_step = st.radio("请选择录入的业务阶段：", ["🎯 项目前期录入", "🤝 中标订单录入", "🏦 回款销账登记"], horizontal=True)
+        sub_step = st.radio("请选择录入的业务阶段：", ["🎯 项目前期录入", "🤝 中标订单录入", "📈 确认收入到货登记", "🏦 回款销账登记"], horizontal=True) # 💡 增加选项
         st.markdown("---")
 
         if sub_step == "🎯 项目前期录入":
@@ -329,22 +292,16 @@ elif menu == "➕ 业务数据维护中心":
                 p_bid_date = st.date_input("5. 开标/签署时间 *", value=datetime.now()).strftime("%Y-%m-%d")
 
                 if st.form_submit_button("💾 确认保存至 Supabase"):
-                    if not p_name or not p_client:
-                        st.error("❌ 项目名称和客户简称为必填项！")
+                    if not p_name or not p_client: st.error("❌ 项目名称和客户简称为必填项！")
                     else:
                         new_id = f"PRJ{int(datetime.now().timestamp())}"
                         payload = {"id": new_id, "name": p_name, "client": p_client, "target": p_target, "stage": p_stage, "bid_date": p_bid_date}
                         res = requests.post(f"{SB_URL}/rest/v1/projects", headers=HEADERS, json=payload, timeout=5)
                         if res.status_code in [200, 201]:
-                            st.success(f"✔️ 框架项目【{p_name}】已经成功同步写入云端！")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error(f"写入失败: {res.text}")
+                            st.success(f"✔️ 框架项目【{p_name}】已经成功同步写入云端！"); st.cache_data.clear(); st.rerun()
 
         elif sub_step == "🤝 中标订单录入":
-            if not projects:
-                st.warning("⚠️ 暂无任何前置项目，请先完成【项目前期录入】！")
+            if not projects: st.warning("⚠️ 暂无任何前置项目，请先完成【项目前期录入】！")
             else:
                 p_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
                 sel_p = st.selectbox("11. 关联源头框架项目 *", list(p_opts.keys()))
@@ -353,47 +310,57 @@ elif menu == "➕ 业务数据维护中心":
                 o_province = st.text_input("3. 区域省份 *")
                 o_client = st.text_input("4. 客户简称 *")
                 o_product = st.text_input("5. 订购产品明细 *")
-
                 cp, cr, cq = st.columns(3)
                 price = cp.number_input("6. 单价(不含税/元) *", min_value=0.0)
                 tax_rate = cr.number_input("7. 税率 *", min_value=0.0, max_value=1.0, value=0.13)
                 qty = cq.number_input("8. 数量 *", min_value=1, value=1)
-
                 amt_no_tax = price * qty
                 amt_with_tax = amt_no_tax * (1 + tax_rate)
                 st.info(f"📊 自动核税预览：不含税: ¥{amt_no_tax:,.2f} | 本次拟录含税额: ¥{amt_with_tax:,.2f}")
                 o_p_name = st.text_input("12. 对应订单项目名称 *")
 
                 if st.button("💾 确认保存订单"):
-                    if not o_id or not o_province or not o_client or not o_product or not o_p_name:
-                        st.error("❌ 请完整填写带有 * 的必填订单字段！")
+                    if not o_id or not o_province or not o_client or not o_product or not o_p_name: st.error("❌ 请完整填写带有 * 的必填订单字段！")
                     else:
                         pid_ref = p_opts[sel_p]
                         requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_ref}", headers=HEADERS, json={"stage": "已中标"}, timeout=5)
-                        
                         o_payload = {"id": o_id, "project_ref": pid_ref, "order_date": o_date, "province": o_province, "client": o_client, "product": o_product, "price_no_tax": price, "tax_rate": tax_rate, "quantity": qty, "amt_no_tax": amt_no_tax, "amt_with_tax": amt_with_tax, "order_p_name": o_p_name}
                         res = requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=o_payload, timeout=5)
-                        if res.status_code in [200, 201]:
-                            st.success(f"✔️ 中标正式合同订单 {o_id} 云端同步成功！")
-                            st.cache_data.clear()
-                            st.rerun()
+                        if res.status_code in [200, 201]: st.success(f"✔️ 中标正式合同订单 {o_id} 云端同步成功！"); st.cache_data.clear(); st.rerun()
+
+        # 💡 核心新增：【📈 确认收入到货登记表单】
+        elif sub_step == "📈 确认收入到货登记":
+            if not orders:
+                st.warning("⚠️ 系统内暂无订单，请先录入正式中标订单。")
+            else:
+                st.markdown("### 📦 客户收货确认收入(到货核销)流登记")
+                with st.form("r_form", clear_on_submit=True):
+                    o_opts = {f"订单:{oid} (接单含税总额:¥{o['amt_with_tax']} | 已确收:¥{o['revenue_total']})": oid for oid, o in orders.items()}
+                    sel_o = st.selectbox("1. 选择要登记收货确收的客户订单号 *", list(o_opts.keys()))
+                    oid_final = o_opts[sel_o]
+                    
+                    r_amt = st.number_input("2. 本次客户签收/开网/实际确认收入金额 (元) *", min_value=0.0)
+                    r_date = st.date_input("3. 实际确认收入到货日期 *", value=datetime.now()).strftime("%Y-%m-%d")
+                    
+                    if st.form_submit_button("💾 确认登记确收收入"):
+                        if r_amt <= 0: st.error("❌ 确收金额需大于0元！")
                         else:
-                            st.error(f"订单写入失败: {res.text}")
+                            r_payload = {"order_ref": oid_final, "amount": r_amt, "revenue_date": r_date}
+                            res = requests.post(f"{SB_URL}/rest/v1/revenues", headers=HEADERS, json=r_payload, timeout=5)
+                            if res.status_code in [200, 201]:
+                                st.success("🎉 收货确收流水同步安全入库！订单数据未受任何修改痕迹污染！")
+                                st.cache_data.clear(); st.rerun()
+                            else: st.error(f"确收写入失败: {res.text}")
 
         elif sub_step == "🏦 回款销账登记":
-            is_manual_order = st.checkbox("⏳ 登记多年前的历史老订单回款（切换为手动输入单号，无需在系统补录订单）")
-            
+            is_manual_order = st.checkbox("⏳ 登记多年前的历史老订单回款")
             with st.form("c_form", clear_on_submit=True):
                 if not is_manual_order:
-                    if not orders:
-                        st.warning("⚠️ 系统内暂无订单。")
-                        st.form_submit_button("不可提交", disabled=True)
+                    if not orders: st.warning("⚠️ 系统内暂无订单。"); st.form_submit_button("不可提交", disabled=True)
                     else:
                         o_opts = {f"订单:{oid} (系统含税额:¥{o['amt_with_tax']})": oid for oid, o in orders.items()}
-                        sel_o = st.selectbox("1. 选择要核销的客户订单号 *", list(o_opts.keys()))
-                        oid_final = o_opts[sel_o]
-                else:
-                    oid_final = st.text_input("1. 手动精确输入历史客户订单号 *")
+                        sel_o = st.selectbox("1. 选择要核销的客户订单号 *", list(o_opts.keys())); oid_final = o_opts[sel_o]
+                else: oid_final = st.text_input("1. 手动精确输入历史客户订单号 *")
 
                 c_amt = st.number_input("2. 本次财务实际到账回款额 (元) *", min_value=0.0)
                 c_date = st.date_input("3. 实际回款进账日期 *", value=datetime.now()).strftime("%Y-%m-%d")
@@ -401,41 +368,16 @@ elif menu == "➕ 业务数据维护中心":
 
                 if st.form_submit_button("💾 确认登记回款"):
                     cleaned_oid = str(oid_final).strip()
-                    if not cleaned_oid:
-                        st.error("❌ 客户订单号不能为空！")
-                    elif c_amt <= 0: 
-                        st.error("❌ 回款金额需大于0元！")
+                    if not cleaned_oid: st.error("❌ 客户订单号不能为空！")
+                    elif c_amt <= 0:  st.error("❌ 回款金额需大于0元！")
                     else:
                         if is_manual_order and (cleaned_oid not in orders):
-                            hedge_payload = {
-                                "id": cleaned_oid,
-                                "project_ref": None,  
-                                "order_date": c_date,
-                                "province": "历史老账归档区",
-                                "client": "历史长账龄客户",
-                                "product": "跨年历史账目结转款（无需补录明细）",
-                                "price_no_tax": c_amt,
-                                "tax_rate": 0.0,
-                                "quantity": 1,
-                                "amt_no_tax": c_amt,
-                                "amt_with_tax": c_amt,
-                                "order_p_name": "多年前老订单挂账"
-                            }
+                            hedge_payload = {"id": cleaned_oid, "project_ref": None, "order_date": c_date, "province": "历史老账归档区", "client": "历史长账龄客户", "product": "跨年历史账目结转款", "price_no_tax": c_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": c_amt, "amt_with_tax": c_amt, "order_p_name": "多年前老订单挂账"}
                             requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=hedge_payload, timeout=5)
                         
-                        c_payload = {
-                            "order_ref": cleaned_oid, 
-                            "amount": c_amt, 
-                            "collection_date": c_date,
-                            "invoice_no": c_invoice if c_invoice else "-"
-                        }
+                        c_payload = {"order_ref": cleaned_oid, "amount": c_amt, "collection_date": c_date, "invoice_no": c_invoice if c_invoice else "-"}
                         res = requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
-                        if res.status_code in [200, 201]:
-                            st.success("🎉 数据安全入库！")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error(f"回款录入失败: {res.text}")
+                        if res.status_code in [200, 201]: st.success("🎉 数据安全入库！"); st.cache_data.clear(); st.rerun()
 
     # 修改功能
     elif op_type == "⚙️ 修改已有信息 (数据回显覆写)":
@@ -446,10 +388,7 @@ elif menu == "➕ 业务数据维护中心":
             if not projects: st.info("云端暂无数据可修改")
             else:
                 p_edit_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
-                sel_edit_p = st.selectbox("请选择要修改的框架项目：", list(p_edit_opts.keys()))
-                pid_edit = p_edit_opts[sel_edit_p]
-                old_p = projects[pid_edit]
-
+                sel_edit_p = st.selectbox("请选择要修改的框架项目：", list(p_edit_opts.keys())); pid_edit = p_edit_opts[sel_edit_p]; old_p = projects[pid_edit]
                 up_p_name = st.text_input("项目框架/名称", value=old_p["name"])
                 up_p_client = st.text_input("客户简称", value=old_p["client"])
                 up_p_target = st.number_input("框架标的总额(元)", min_value=0.0, value=old_p["target"])
@@ -457,77 +396,40 @@ elif menu == "➕ 业务数据维护中心":
                 try: old_dt = datetime.strptime(old_p["bid_date"], "%Y-%m-%d")
                 except: old_dt = datetime.now()
                 up_p_date = st.date_input("开标时间", value=old_dt).strftime("%Y-%m-%d")
-                
                 p_edit_reason = st.text_area("🔧 请硬性输入本次项目调整/修正的原因备注 * (必填)")
 
                 if st.button("💾 覆写并保存项目修改"):
-                    if not p_edit_reason.strip():
-                        st.error("❌ 必须填写修改原因才能提交！")
+                    if not p_edit_reason.strip(): st.error("❌ 必须填写修改原因才能提交！")
                     else:
                         trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {p_edit_reason.strip()}]"
-                        up_payload = {
-                            "name": up_p_name, 
-                            "client": up_p_client, 
-                            "target": up_p_target, 
-                            "stage": up_p_stage + trace_stamp, 
-                            "bid_date": up_p_date
-                        }
+                        up_payload = {"name": up_p_name, "client": up_p_client, "target": up_p_target, "stage": up_p_stage + trace_stamp, "bid_date": up_p_date}
                         res = requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
-                        if res.status_code in [200, 204]:
-                            st.success("🎉 框架项目已成功更正！")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error(f"更新项目失败: {res.text}")
+                        if res.status_code in [200, 204]: st.success("🎉 框架项目已成功更正！"); st.cache_data.clear(); st.rerun()
 
         elif edit_target == "🤝 修改订单明细":
             if not orders: st.info("云端暂无订单数据可修改")
             else:
                 o_edit_opts = {f"订单号:{oid} | {o['order_p_name']}": oid for oid, o in orders.items()}
-                sel_edit_o = st.selectbox("请选择要更正的正式订单：", list(o_edit_opts.keys()))
-                oid_edit = o_edit_opts[sel_edit_o]
-                old_o = orders[oid_edit]
-
+                sel_edit_o = st.selectbox("请选择要更正的正式订单：", list(o_edit_opts.keys())); oid_edit = o_edit_opts[sel_edit_o]; old_o = orders[oid_edit]
                 up_o_province = st.text_input("省份", value=old_o["province"])
                 up_o_client = st.text_input("客户简称", value=old_o["client"])
                 up_o_product = st.text_input("订单产品(去除旧留档后缀)", value=old_o["product"].split(" [修改痕迹")[0])
                 up_o_p_name = st.text_input("订单项目名称", value=old_o["order_p_name"])
-
                 cep, cer, ceq = st.columns(3)
                 up_price = cep.number_input("单价(不含税)", min_value=0.0, value=old_o["price_no_tax"])
                 up_tax_rate = cer.number_input("税率", min_value=0.0, max_value=1.0, value=old_o["tax_rate"])
                 up_qty = ceq.number_input("数量", min_value=1, value=int(old_o["quantity"]))
-
                 new_no_tax = up_price * up_qty
                 new_tax_in = new_no_tax * (1 + up_tax_rate)
-
                 try: old_o_dt = datetime.strptime(old_o["date"], "%Y-%m-%d")
                 except: old_o_dt = datetime.now()
                 up_o_date = st.date_input("订单日期", value=old_o_dt).strftime("%Y-%m-%d")
-                
                 o_edit_reason = st.text_area("🔧 请硬性输入本次订单调整/修正的原因备注 * (必填)")
 
                 if st.button("💾 覆写并保存订单修改"):
-                    if not o_edit_reason.strip():
-                        st.error("❌ 必须填写修改原因才能提交！")
+                    if not o_edit_reason.strip(): st.error("❌ 必须填写修改原因才能提交！")
                     else:
                         trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {o_edit_reason.strip()}]"
-                        up_o_payload = {
-                            "province": up_o_province, 
-                            "client": up_o_client, 
-                            "product": up_o_product + trace_stamp, 
-                            "order_p_name": up_o_p_name, 
-                            "price_no_tax": up_price, 
-                            "tax_rate": up_tax_rate, 
-                            "quantity": up_qty, 
-                            "amt_no_tax": new_no_tax, 
-                            "amt_with_tax": new_tax_in, 
-                            "order_date": up_o_date
-                        }
+                        up_o_payload = {"province": up_o_province, "client": up_o_client, "product": up_o_product + trace_stamp, "order_p_name": up_o_p_name, "price_no_tax": up_price, "tax_rate": up_tax_rate, "quantity": up_qty, "amt_no_tax": new_no_tax, "amt_with_tax": new_tax_in, "order_date": up_o_date}
                         res = requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
-                        if res.status_code in [200, 204]:
-                            st.success("🎉 订单财务明细已成功更正！")
-                            st.cache_data.clear()
-                            st.rerun()
-                        else:
-                            st.error(f"更新订单失败: {res.text}")
+                        if res.status_code in [200, 204]: st.success("🎉 订单财务明细已成功更正！"); st.cache_data.clear(); st.rerun()
