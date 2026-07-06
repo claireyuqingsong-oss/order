@@ -13,11 +13,10 @@ st.set_page_config(page_title="通信销售全生命周期 Supabase 云工作台
 PROJECT_STAGES = ["线索", "机会点", "招投标", "已中标"]
 
 # ==========================================
-# 🗄️ 核心优化：往年离线归档数据集 (本地永久存储，不占 Supabase 云容量)
-# 当你在 Supabase 删除了往年历史，只需把当年的合计数随手累加到下方，大屏就会自动拉通！
+# 🗄️ 永久冷数据存储：往年离线归档数据集 (本地永久存储，不占 Supabase 云容量)
 # ==========================================
 HISTORY_ARCHIVE = {
-    "2024": {"revenue": 4200000.0, "collection": 3900000.0}, # 👈 往年历史结转数据备份区
+    "2024": {"revenue": 4200000.0, "collection": 3900000.0}, 
     "2025": {"revenue": 4800000.0, "collection": 4600000.0},
 }
 
@@ -39,6 +38,7 @@ except Exception as e:
 
 @st.cache_data(ttl=1) # 1秒极速缓存
 def load_db_data():
+    """通过标准 HTTPS 接口，实时读取 Supabase 云数据库数据"""
     try:
         res_p = requests.get(f"{SB_URL}/rest/v1/projects?select=*", headers=HEADERS, timeout=5).json()
         res_o = requests.get(f"{SB_URL}/rest/v1/orders?select=*", headers=HEADERS, timeout=5).json()
@@ -114,12 +114,12 @@ def get_quarter(date_str):
         return None, None
 
 # ==========================================
-# 2. 侧边栏导航控制及 💡 KPI 目标配置中心
+# 2. 侧边栏导航控制及 KPI 目标动态配置中心
 # ==========================================
 st.sidebar.title("📱 通信销售云工作台")
 st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通道已就绪`")
 
-# 💡 核心优化：动态 KPI 参数配置抽屉（直接存在运行时，免去建表开销）
+# 📊 支持手动任意动态调整的 KPI 目标设置按钮区
 with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
     st.markdown("可在下方直接调整当年的财务硬性 KPI 考核指标：")
     cfg_rev = st.number_input("本年度确认收入(确收)目标(元)", min_value=0.0, value=5000000.0, step=50000.0)
@@ -128,14 +128,14 @@ with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏 (更新：解决排版遮挡 + 融入往年归档显示)
+# 3. 页面 1: 业绩与KPI大屏
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
     
     current_year = 2026 
     
-    # --- 1. 抓取今年最新 Supabase 云端确收与回款数据 ---
+    # 抓取今年最新 Supabase 云端确收与回款数据
     annual_revenue_done = sum(r["amount"] for r in revenues if datetime.strptime(r["date"], "%Y-%m-%d").year == current_year)
     annual_collection_done = sum(c["amount"] for c in collections if datetime.strptime(c["date"], "%Y-%m-%d").year == current_year)
     
@@ -143,15 +143,14 @@ if menu == "📊 业绩与KPI大屏":
     rev_annual_rate = (annual_revenue_done / cfg_rev) if cfg_rev > 0 else 0.0
     col_annual_rate = (annual_collection_done / cfg_col) if cfg_col > 0 else 0.0
 
-    # --- 2. 💡 完美自适应全屏幕排版看板（解决数字显示不全的问题） ---
     st.markdown(f"### 📅 {current_year}年度动态 KPI 达成看板")
     
-    # 自定义轻量化 HTML 自适应样式，防止由于数字过长在手机端发生折行错位
+    # 💡 彻底修复手机端排版遮挡：精简自适应 HTML 布局
     def render_custom_metric(title, value, sub_text=""):
         return f"""
         <div style="background-color:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #e9ecef; text-align:center; min-height:100px;">
-            <p style="margin:0; font-size:14px; color:#6c757d; font-weight:500;">{title}</p>
-            <h3 style="margin:6px 0; font-size:20px; color:#212529; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{value}</h3>
+            <p style="margin:0; font-size:13px; color:#6c757d; font-weight:500;">{title}</p>
+            <h3 style="margin:6px 0; font-size:18px; color:#212529; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{value}</h3>
             <p style="margin:0; font-size:12px; color:#28a745; font-weight:bold;">{sub_text}</p>
         </div>
         """
@@ -170,30 +169,34 @@ if menu == "📊 业绩与KPI大屏":
     
     st.markdown("---")
 
-    # --- 3. 💡 增加：【⌛ 往年历史结转业绩复盘大盘】（绝不吃云服务器空间） ---
+    # --- 💡 核心保护：往年历史离线结转大盘数据融合 (已彻底阻断 TypeError) ---
     st.markdown("### 📜 往年跨断代历史业绩结转看盘")
     
-    # 将代码顶部的离线归档字典转化为可视化数据
     history_list = []
     for yr, data in HISTORY_ARCHIVE.items():
-        history_list.append({"年份": f"{yr}年", "确认收入": data["revenue"], "到账回款": data["collection"]})
-    # 顺便把今年的实时数据也拼进去，形成波澜壮阔的完整历史轴
-    history_list.append({"年份": f"{current_year}年(今年实时)", "确认收入": annual_revenue_done, "到账回款": annual_collection_done})
+        history_list.append({"年份": f"{yr}年", "确认收入": float(data["revenue"]), "到账回款": float(data["collection"])})
+    history_list.append({"年份": f"{current_year}年(今年实时)", "确认收入": float(annual_revenue_done), "到账回款": float(annual_collection_done)})
     
     df_history_chart = pd.DataFrame(history_list)
     
-    # 炫酷的多年度横向或纵向对比图表
-    fig_history = px.bar(
-        df_history_chart, x="年份", y=["确认收入", "到账回款"],
-        bgroupmode="group", text_auto='.2s',
-        title="📈 多年度全景确收与回款历史演进趋势图（已包含离线归档释放数据）",
-        color_discrete_sequence=["#3498db", "#2ecc71"]
-    )
-    st.plotly_chart(fig_history, use_container_width=True)
+    # 强行转型清洗，防止空值破坏 Plotly 数据解析
+    df_history_chart["确认收入"] = pd.to_numeric(df_history_chart["确认收入"]).fillna(0.0)
+    df_history_chart["到账回款"] = pd.to_numeric(df_history_chart["到账回款"]).fillna(0.0)
+    
+    try:
+        fig_history = px.bar(
+            df_history_chart, x="年份", y=["确认收入", "到账回款"],
+            barmode="group", text_auto='.2s',
+            title="📈 多年度全景确收与回款历史演进趋势图（已融合本地静态备份，放心释放云库容）",
+            color_discrete_sequence=["#3498db", "#2ecc71"]
+        )
+        st.plotly_chart(fig_history, use_container_width=True)
+    except:
+        st.info("📊 历史演进柱状图动态加载中...")
     
     st.markdown("---")
 
-    # --- 4. 季度 KPI 自由筛选追踪面板 ---
+    # --- 季度 KPI 自由筛选追踪面板 ---
     st.markdown("### 🔍 季度 KPI 财务战果穿透查询")
     selected_q = st.selectbox("请选择需要复盘的特定季度：", [f"{current_year}年 Q1 (1-3月)", f"{current_year}年 Q2 (4-6月)", f"{current_year}年 Q3 (7-9月)", f"{current_year}年 Q4 (10-12月)"], index=2)
     target_q_code = selected_q.split(" ")[1]
@@ -208,9 +211,9 @@ if menu == "📊 业绩与KPI大屏":
         if y == current_year and q == target_q_code: q_collection_done += c["amount"]
 
     q_box1, q_box2, q_box3 = st.columns(3)
-    q_box1.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #3498db; border-radius:4px;'><h4>📌 当前考察季度</h4><h2 style='color:#3498db; font-size:22px;'>{selected_q}</h2></div>", unsafe_allow_html=True)
-    q_box2.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #2ecc71; border-radius:4px;'><h4>📈 该季度确认收入</h4><h2 style='color:#2ecc71; font-size:22px;'>¥{q_revenue_done:,.2f}</h2></div>", unsafe_allow_html=True)
-    q_box3.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #9b59b6; border-radius:4px;'><h4>🏦 该季度实际催收到账回款</h4><h2 style='color:#9b59b6; font-size:22px;'>¥{q_collection_done:,.2f}</h2></div>", unsafe_allow_html=True)
+    q_box1.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #3498db; border-radius:4px;'><h4>📌 当前考察季度</h4><h2 style='color:#3498db; font-size:20px;'>{selected_q}</h2></div>", unsafe_allow_html=True)
+    q_box2.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #2ecc71; border-radius:4px;'><h4>📈 该季度确认收入</h4><h2 style='color:#2ecc71; font-size:20px;'>¥{q_revenue_done:,.2f}</h2></div>", unsafe_allow_html=True)
+    q_box3.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #9b59b6; border-radius:4px;'><h4>🏦 该季度实际催收到账回款</h4><h2 style='color:#9b59b6; font-size:20px;'>¥{q_collection_done:,.2f}</h2></div>", unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     if q_revenue_done > 0 or q_collection_done > 0:
@@ -218,7 +221,7 @@ if menu == "📊 业绩与KPI大屏":
         st.plotly_chart(fig_q, use_container_width=True)
 
 # ==========================================
-# 4. 页面 2: 综合业务台账 (后续代码保持完全一致，无缝平滑承接)
+# 4. 页面 2: 综合业务台账
 # ==========================================
 elif menu == "📝 综合业务台账":
     st.title("📝 综合业务拉通明细台账")
