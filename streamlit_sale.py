@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -126,7 +125,7 @@ def make_csv_buffer(df):
     df.to_csv(buffer, index=False, encoding='utf-8-sig')
     return buffer.getvalue()
 
-# 动态提取数据库里已经存在的所有自定义账户，并与基础账户合并，实现动态资产树生长
+# 动态提取自定义账户
 existing_accounts = set(BASE_ACCOUNTS)
 for l in ledgers:
     if l["account_from"]: existing_accounts.add(l["account_from"])
@@ -148,7 +147,7 @@ with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心", "🏦 复式财务管理中心", "💾 往年库容释放与数据导出"])
 
 # ==========================================
-# [前面三个老业务模块代码保持不变，完美兼容]
+# [老核心模块代码保持不变，稳定兼容]
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
@@ -200,7 +199,7 @@ elif menu == "➕ 业务数据维护中心":
                 if res.status_code in [200, 201]: st.success("写入成功！"); st.rerun()
 
 # ==========================================
-# 6. 🏦 复式财务管理中心 (💡 hledger 重构版)
+# 6. 🏦 复式财务管理中心
 # ==========================================
 elif menu == "🏦 复式财务管理中心":
     st.title("🏦 个人与家庭复式财务账本中心 (hledger 高度自由版)")
@@ -208,15 +207,12 @@ elif menu == "🏦 复式财务管理中心":
     
     f_tabs = st.tabs(["📊 个人财务分析大屏", "📝 复式分录明细账", "✍️ 极速记账与多账户拆分"])
     
-    # --- 选项卡 A：分析大屏 ---
     with f_tabs[0]:
         st.subheader("📊 个人资产与专项标签开销穿透")
-        if not ledgers:
-            st.info("暂无复式记账明细。")
+        if not ledgers: st.info("暂无复式记账明细。")
         else:
             df_l = pd.DataFrame(ledgers)
             df_exp = df_l[df_l["account_to"].str.startswith("Expenses:")]
-            
             sc1, sc2 = st.columns(2)
             with sc1:
                 st.markdown("#### 🍕 动态消费去向科目构成")
@@ -224,25 +220,20 @@ elif menu == "🏦 复式财务管理中心":
                     fig_pie_l = px.pie(df_exp, names="account_to", values="amount", hole=0.3, title="各项 Expenses 账户开销占比")
                     st.plotly_chart(fig_pie_l, use_container_width=True)
                 else: st.text("暂无费用支出数据。")
-                
             with sc2:
                 st.markdown("#### 🏷️ 自由 Tag 标签多维深度统计")
-                # 动态提取所有用户填写过的自定义标签，彻底解决局限性
                 all_tag_stats = {}
                 for _, row in df_l.iterrows():
                     raw_tags = str(row["tags"]).replace(",", " ").replace("，", " ").split()
                     for t in raw_tags:
                         t = t.strip().lower()
-                        if t:
-                            all_tag_stats[t] = all_tag_stats.get(t, 0.0) + row["amount"]
-                
+                        if t: all_tag_stats[t] = all_tag_stats.get(t, 0.0) + row["amount"]
                 if all_tag_stats:
                     df_tags = pd.DataFrame(list(all_tag_stats.items()), columns=["自定义Tag标签", "累计涉及金额(元)"]).sort_values(by="累计涉及金额(元)", ascending=False)
                     fig_tag_bar = px.bar(df_tags, x="自定义Tag标签", y="累计涉及金额(元)", text_auto=True, title="自由输入标签累计统计柱状图")
                     st.plotly_chart(fig_tag_bar, use_container_width=True)
                 else: st.text("未检索到任何交易带有 Tag 标签。")
 
-    # --- 选项卡 B：明细账目展示 ---
     with f_tabs[1]:
         st.subheader("📜 复式记账标准分录流水 (Journal)")
         if ledgers:
@@ -251,123 +242,109 @@ elif menu == "🏦 复式财务管理中心":
             st.dataframe(df_journal, use_container_width=True, hide_index=True)
         else: st.info("目前还没有账目流水。")
 
-    # --- 选项卡 C：极速记账与复合拆分 ---
     with f_tabs[2]:
         st.subheader("✍️ 录入复式流水分录（完美支持单笔交易多账户分拆）")
-        
-        # 基础公共元数据
         l_date = st.date_input("1. 交易日期", value=datetime.now()).strftime("%Y-%m-%d")
-        l_desc = st.text_input("2. 交易描述/商户名称 *", placeholder="例如：汉庭酒店住宿(部分报销)、山姆采购")
-        
+        l_desc = st.text_input("2. 交易描述/商户名称 *", placeholder="例如：汉庭酒店住宿(部分报销)")
         st.markdown("---")
         st.markdown("### 🧩 复式分录借贷平衡配置")
-        st.caption("💡 示例：住宿产生210元（去向Expenses:Travel 210）。公司报销200（来源Assets:Reimbursement 200），个人出10元（来源Assets:WeChat 10）。")
-        
-        # 利用 Streamlit session_state 动态管理无限多条子分录（多科目拆分）
-        if "legs_count" not in st.session_state:
-            st.session_state.legs_count = 2  # 默认至少有2个双边科目
-
+        if "legs_count" not in st.session_state: st.session_state.legs_count = 2
         def add_leg(): st.session_state.legs_count += 1
-        def remove_leg(): 
+        def remove_leg():
             if st.session_state.legs_count > 2: st.session_state.legs_count -= 1
 
-        # 动态表单渲染
         leg_data = []
         for i in range(st.session_state.legs_count):
             st.markdown(f"**科目分录 #{i+1} :**")
             c1, c2, c3, c4 = st.columns([2, 3, 3, 2])
-            
             direction = c1.selectbox(f"方向#{i+1}", ["资金去向 (借/To/支出或资产增加)", "资金来源 (贷/From/资产减少或收入)"], key=f"dir_{i}")
-            
-            # 升级：组合输入，既能下拉选历史账户，又能直接手工填写全新账户
             acc_select = c2.selectbox(f"选择已有账户#{i+1}", ["[+ 手工输入全新账户]"] + DYNAMIC_ACCOUNT_LIST, key=f"acc_sel_{i}")
             if acc_select == "[+ 手工输入全新账户]":
                 acc_final = c3.text_input(f"✍️ 自定义新账户名#{i+1}", placeholder="层级用英文冒号隔开如 Expenses:Food:Snacks", key=f"acc_raw_{i}")
             else:
                 acc_final = acc_select
                 c3.info(f"已锁定账户: `{acc_final}`")
-                
             amt = c4.number_input(f"金额(元)#{i+1}", min_value=0.0, step=10.0, key=f"amt_{i}")
             leg_data.append({"direction": direction, "account": acc_final, "amount": amt})
-            st.markdown(" ")
 
-        # 动态增减科目控制按钮
         b_col1, b_col2, _ = st.columns([2, 2, 8])
         b_col1.button("➕ 添加拆分分录/多账户", on_click=add_leg)
         b_col2.button("➖ 减少末尾分录", on_click=remove_leg)
 
         st.markdown("---")
-        # 核心：复式记账借贷平衡校验断路器
         total_to = sum(item["amount"] for item in leg_data if "去向" in item["direction"])
         total_from = sum(item["amount"] for item in leg_data if "来源" in item["direction"])
         balance_gap = round(total_to - total_from, 2)
         
         st.markdown(f"### 🧮 借贷平衡实时审计看盘:")
         ck1, ck2, ck3 = st.columns(3)
-        ck1.metric("去向账户(借/To)总计金额", f"¥{total_to:,.2f}")
-        ck2.metric("资金来源(贷/From)总计金额", f"¥{total_from:,.2f}")
-        
-        if balance_gap == 0:
-            ck3.success("✅ 借贷相抵差额: ¥0.00 (借贷平衡，准许入账！)")
-        else:
-            ck3.error(f"❌ 借贷失衡差额: ¥{balance_gap:,.2f} (去向和来源金额不相等，保存已硬锁死)")
+        ck1.metric("去向账户(借/To)总计", f"¥{total_to:,.2f}")
+        ck2.metric("资金来源(贷/From)总计", f"¥{total_from:,.2f}")
+        if balance_gap == 0: ck3.success("✅ 借贷平衡，准许入账！")
+        else: ck3.error(f"❌ 借贷失衡差额: ¥{balance_gap:,.2f}")
             
         st.markdown("---")
-        # 升级：完全自由、解耦的标签与备注栏
-        l_tags = st.text_input("4. 自由 Tag 标签 (多个标签请用空格或逗号隔开，无需写#号)", placeholder="例如: child 装修 2026暑假 报销凭证")
+        l_tags = st.text_input("4. 自由 Tag 标签 (多个标签用空格或逗号隔开)", placeholder="例如: child 装修 报销凭证")
         l_comment = st.text_input("5. 附加交易备注说明")
         
-        # 提交保存引擎
         if st.button("💾 确认复合复式记账同步写入云端", disabled=(balance_gap != 0 or not l_desc)):
-            if not l_desc:
-                st.error("❌ 必须填写交易描述！")
+            if not l_desc: st.error("❌ 必须填写交易描述！")
             else:
                 success_flag = True
-                # 分拆多科目写入核心逻辑：为了适配现有的双边简易账本表，将复合交易拆解为多条子双边流水写入
                 to_legs = [x for x in leg_data if "去向" in x["direction"] and x["amount"] > 0]
                 from_legs = [x for x in leg_data if "来源" in x["direction"] and x["amount"] > 0]
-                
-                # 智能分拆算法：将多个 To 和多个 From 配对成标准双边流水分录
                 payload_list = []
-                # 极简模式或复杂模式通用的流水分拆分配
                 for t_leg in to_legs:
                     t_acc = t_leg["account"]
                     t_amt = t_leg["amount"]
-                    
                     for f_leg in from_legs:
                         if t_amt <= 0: break
                         f_acc = f_leg["account"]
                         f_amt = f_leg["amount"]
                         if f_amt <= 0: continue
-                        
                         match_amt = min(t_amt, f_amt)
                         t_amt -= match_amt
                         f_leg["amount"] -= match_amt
-                        
-                        payload_list.append({
-                            "tx_date": l_date, "description": l_desc,
-                            "account_from": f_acc, "account_to": t_acc,
-                            "amount": match_amt, "tags": l_tags.strip(), "comment": l_comment
-                        })
+                        payload_list.append({"tx_date": l_date, "description": l_desc, "account_from": f_acc, "account_to": t_acc, "amount": match_amt, "tags": l_tags.strip(), "comment": l_comment})
 
-                # 批量同步发送至 Supabase
                 for payload in payload_list:
                     res = requests.post(f"{SB_URL}/rest/v1/ledger_entries", headers=HEADERS, json=payload, timeout=5)
                     if res.status_code not in [200, 201]: success_flag = False
-                
                 if success_flag:
-                    st.success("🎉 复式记账多边拆分分录成功打散合并写入云端！各科目账目借贷相抵，绝对平衡！")
-                    st.cache_data.clear()
-                    st.rerun()
-                else: st.error("网络握手出现异常，部分分录写入失败，请检查数据库状态。")
+                    st.success("🎉 复式记账多边拆分分录成功写入云端！")
+                    st.cache_data.clear(); st.rerun()
+                else: st.error("网络握手异常，写入失败。")
 
 # ==========================================
-# 7. 💾 往年库容释放与数据导出中心 (防误删熔断保护)
+# 7. 💾 往年库容释放与数据导出中心 (💡 增加不区分年份财务全量导出功能)
 # ==========================================
 elif menu == "💾 往年库容释放与数据导出":
-    st.title("💾 往年库容释放与本地 MySQL 数据归档备份中心")
-    export_year = st.selectbox("请选择要批量处理的业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
-    st.write(f"📡 正在动态扫描 `{export_year}` 年的公网云端留存台账...")
+    st.title("💾 往年库容释放与本地数据备份中心")
+    
+    # 💡 新增：不区分年份，全量一键导出财务账本通道
+    st.subheader("🏦 财务数据专项：全量历史复式财务账本下载通道")
+    st.markdown("此备份通道不区分业务年份，一键拉取云端数据库中**所有年份、所有科目和动态标签**的完整明细流水，可直接导入本地 MySQL 数据库，或使用 Excel/Python 进行全景财务透视。")
+    if ledgers:
+        df_all_ledgers = pd.DataFrame(ledgers)[["id", "date", "code", "description", "account_from", "account_to", "amount", "tags", "comment"]]
+        df_all_ledgers.columns = ["id", "tx_date", "code", "description", "account_from", "account_to", "amount", "tags", "comment"] # 完美契合 MySQL 结构
+        csv_all_l = make_csv_buffer(df_all_ledgers)
+        if csv_all_l:
+            st.download_button(
+                label=f"📥 导出全量历史复式财务账本 (共 {len(df_all_ledgers)} 条分录).csv", 
+                data=csv_all_l, 
+                file_name="mysql_ledger_entries_all.csv", 
+                mime="text/csv",
+                type="primary"
+            )
+    else:
+        st.info("📊 暂无财务记账数据留存，无法导出。")
+        
+    st.markdown("---")
+    
+    # 下方保持原有业务订单按年份的熔断清空逻辑不变
+    st.subheader("📅 业务销售数据专项：按年度归档与容量清空")
+    export_year = st.selectbox("请选择要处理的销售业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
+    st.write(f"📡 正在动态扫描 `{export_year}` 年的销售回款台账...")
 
     p_exported = [{"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]} for p in projects.values() if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year]
     o_exported = [{"id": o["id"], "project_ref": o["p_ref"], "order_date": o["date"], "province": o["province"], "client": o["client"], "product": o["product"], "price_no_tax": o["price_no_tax"], "tax_rate": o["tax_rate"], "quantity": o["quantity"], "amt_no_tax": o["amt_no_tax"], "amt_with_tax": o["amt_with_tax"], "order_p_name": o["order_p_name"]} for o in orders.values() if datetime.strptime(o["date"], "%Y-%m-%d").year == export_year]
@@ -391,17 +368,15 @@ elif menu == "💾 往年库容释放与数据导出":
         if csv_r: st.download_button(f"📥 下载 revenues_{export_year}.csv", csv_r, f"mysql_revenues_{export_year}.csv", "text/csv")
 
     st.markdown("---")
-    st.subheader("🚨 线上云容清空释放执行中心")
-    
     if export_year >= system_current_year:
-        st.error(f"🔒 **物理删除硬熔断锁死**：您选择的 `{export_year}` 年属于当前正在经营或未来的活跃年度。禁止执行删除！数据已被安全保护。")
+        st.error(f"🔒 **物理删除硬熔断锁死**：当前或活跃年度禁止执行清空删除！")
     else:
-        st.warning(f"⚠️ 允许执行：您当前选择的是往年历史老数据（{export_year} 年）。")
-        confirm_downloaded = st.checkbox(f"🔴 **我发誓确认：我刚才已经下载了该年度的全部明细 CSV 文件，并完成本地备份！**")
+        st.warning(f"⚠️ 允许执行往年历史老数据（{export_year} 年）清空。")
+        confirm_downloaded = st.checkbox(f"🔴 **我发誓确认：我刚才已经下载了销售相关明细 CSV 文件并完成备份！**")
         if confirm_downloaded:
-            if st.button(f"🗑️ 物理清空云端 {export_year} 全部账目数据", type="primary"):
+            if st.button(f"🗑️ 物理清空云端 {export_year} 全部销售账目数据", type="primary"):
                 requests.delete(f"{SB_URL}/rest/v1/projects?bid_date=gte.{export_year}-01-01&bid_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
                 requests.delete(f"{SB_URL}/rest/v1/orders?order_date=gte.{export_year}-01-01&order_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
                 requests.delete(f"{SB_URL}/rest/v1/collections?collection_date=gte.{export_year}-01-01&collection_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
                 requests.delete(f"{SB_URL}/rest/v1/revenues?revenue_date=gte.{export_year}-01-01&revenue_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-                st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
+                st.success("老业务数据成功物理粉碎！"); st.cache_data.clear(); st.rerun()
