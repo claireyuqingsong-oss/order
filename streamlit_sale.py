@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -8,7 +9,7 @@ import io
 # ==========================================
 # 0. 页面基础配置 (必须作为首句)
 # ==========================================
-st.set_page_config(page_title="通信销售全生命周期 Supabase 云工作台", layout="wide")
+st.set_page_config(page_title="通信销售与复式财务全能云工作台", layout="wide")
 
 PROJECT_STAGES = ["线索", "机会点", "招投标", "已中标"]
 
@@ -19,6 +20,13 @@ HISTORY_ARCHIVE = {
     "2024": {"revenue": 4200000.0, "collection": 3900000.0}, 
     "2025": {"revenue": 4800000.0, "collection": 4600000.0},
 }
+
+# 💡 复式记账基础常用账户树定义 (兼容 hledger 规范)
+DEFAULT_ACCOUNTS = [
+    "Assets:WeChat", "Assets:Alipay", "Assets:Card:ICBC", "Assets:Cash",
+    "Expenses:Food", "Expenses:Child", "Expenses:Decoration", "Expenses:Travel", "Expenses:Daily",
+    "Liabilities:CreditCard", "Income:Salary", "Income:SalesBonus"
+]
 
 # ==========================================
 # 1. 🚀 官方 API 高速安全驱动引擎
@@ -38,15 +46,16 @@ except Exception as e:
 
 @st.cache_data(ttl=1) # 1秒极速缓存
 def load_db_data():
-    """通过标准 HTTPS 接口，实时读取 Supabase 云数据库数据"""
+    """实时读取 Supabase 云数据库数据(融入复式记账表)"""
     try:
         res_p = requests.get(f"{SB_URL}/rest/v1/projects?select=*", headers=HEADERS, timeout=5).json()
         res_o = requests.get(f"{SB_URL}/rest/v1/orders?select=*", headers=HEADERS, timeout=5).json()
         res_c = requests.get(f"{SB_URL}/rest/v1/collections?select=*", headers=HEADERS, timeout=5).json()
         res_r = requests.get(f"{SB_URL}/rest/v1/revenues?select=*", headers=HEADERS, timeout=5).json() 
+        res_l = requests.get(f"{SB_URL}/rest/v1/ledger_entries?select=*", headers=HEADERS, timeout=5).json() # 💡 读复式记账
     except Exception as e:
         st.error(f"📡 连不上云数据库，网络握手超时！详情: {e}")
-        return {}, {}, [], []
+        return {}, {}, [], [], []
 
     projects_dict = {}
     if isinstance(res_p, list):
@@ -84,6 +93,16 @@ def load_db_data():
             revenues_list.append({
                 "o_ref": row['order_ref'], "amount": float(row['amount']), "date": str(row['revenue_date'])
             })
+
+    ledger_list = [] # 💡 复式账本流水
+    if isinstance(res_l, list):
+        for row in res_l:
+            ledger_list.append({
+                "id": row["id"], "date": str(row["tx_date"]), "code": row.get("code", "-"),
+                "description": row["description"], "account_from": row["account_from"],
+                "account_to": row["account_to"], "amount": float(row["amount"]),
+                "tags": row.get("tags", ""), "comment": row.get("comment", "")
+            })
         
     for oid, o in orders_dict.items():
         if o["p_ref"] and o["p_ref"] in projects_dict:
@@ -100,11 +119,11 @@ def load_db_data():
         if r["o_ref"] in orders_dict:
             orders_dict[r["o_ref"]]["revenue_total"] += r["amount"]
 
-    return projects_dict, orders_dict, collections_list, revenues_list
+    return projects_dict, orders_dict, collections_list, revenues_list, ledger_list
 
 # 强制清空本地缓存以加载最新公网云数据
 st.cache_data.clear()
-projects, orders, collections, revenues = load_db_data()
+projects, orders, collections, revenues, ledgers = load_db_data()
 
 def get_quarter(date_str):
     try:
@@ -116,32 +135,29 @@ def get_quarter(date_str):
 # ==========================================
 # 2. 侧边栏导航控制及 KPI 目标动态配置中心
 # ==========================================
-st.sidebar.title("📱 通信销售云工作台")
+st.sidebar.title("📱 业务与财务拉通工作台")
 st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通道已就绪`")
 
-# 📊 自动识别当前实际年份，大屏根据此年份自动更新达成看板
 system_current_year = datetime.now().year
 
 with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
     st.markdown(f"可在下方直接调整 **{system_current_year}** 年的财务硬性 KPI 考核指标：")
-    cfg_rev = st.number_input("本年度确认收入(确收)目标(元)", min_value=0.0, value=5000000.0, step=50000.0)
+    cfg_rev = st.number_input("本年度确认收入目标(元)", min_value=0.0, value=5000000.0, step=50000.0)
     cfg_col = st.number_input("本年度到账回款目标(元)", min_value=0.0, value=4500000.0, step=50000.0)
 
-menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心", "💾 往年库容释放与数据导出"])
+# 💡 导航菜单并入全新“复式记账管理系统”
+menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心", "🏦 复式财务管理中心", "💾 往年库容释放与数据导出"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏 (动态自动关联年份)
+# 3. 页面 1: 业绩与KPI大屏
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
+    current_year = system_current_year
     
-    current_year = system_current_year # 💡 根据系统年份自动切换大屏目标，永不写死
-    
-    # 动态抓取当前实际年份的 Supabase 确收与回款数据
     annual_revenue_done = sum(r["amount"] for r in revenues if datetime.strptime(r["date"], "%Y-%m-%d").year == current_year)
     annual_collection_done = sum(c["amount"] for c in collections if datetime.strptime(c["date"], "%Y-%m-%d").year == current_year)
     
-    # 动态计算达成率
     rev_annual_rate = (annual_revenue_done / cfg_rev) if cfg_rev > 0 else 0.0
     col_annual_rate = (annual_collection_done / cfg_col) if cfg_col > 0 else 0.0
 
@@ -169,9 +185,7 @@ if menu == "📊 业绩与KPI大屏":
     st.progress(min(1.0, col_annual_rate))
     
     st.markdown("---")
-
     st.markdown("### 📜 往年跨断代历史业绩结转看盘")
-    
     history_list = []
     for yr, data in HISTORY_ARCHIVE.items():
         history_list.append({"年份": f"{yr}年", "确认收入": float(data["revenue"]), "到账回款": float(data["collection"])})
@@ -182,40 +196,9 @@ if menu == "📊 业绩与KPI大屏":
     df_history_chart["到账回款"] = pd.to_numeric(df_history_chart["到账回款"]).fillna(0.0)
     
     try:
-        fig_history = px.bar(
-            df_history_chart, x="年份", y=["确认收入", "到账回款"],
-            barmode="group", text_auto='.2s',
-            title="📈 多年度全景确收与回款历史演进趋势图（已融合本地静态备份，放心释放云库容）",
-            color_discrete_sequence=["#3498db", "#2ecc71"]
-        )
+        fig_history = px.bar(df_history_chart, x="年份", y=["确认收入", "到账回款"], barmode="group", text_auto='.2s', title="📈 多年度全景确收与回款历史演进趋势图", color_discrete_sequence=["#3498db", "#2ecc71"])
         st.plotly_chart(fig_history, use_container_width=True)
-    except:
-        st.info("📊 历史演进柱状图动态加载中...")
-    
-    st.markdown("---")
-
-    st.markdown("### 🔍 季度 KPI 财务战果穿透查询")
-    selected_q = st.selectbox("请选择需要复盘的特定季度：", [f"{current_year}年 Q1 (1-3月)", f"{current_year}年 Q2 (4-6月)", f"{current_year}年 Q3 (7-9月)", f"{current_year}年 Q4 (10-12月)"], index=2)
-    target_q_code = selected_q.split(" ")[1]
-
-    q_revenue_done = 0.0
-    q_collection_done = 0.0
-    for r in revenues:
-        y, q = get_quarter(r["date"])
-        if y == current_year and q == target_q_code: q_revenue_done += r["amount"]
-    for c in collections:
-        y, q = get_quarter(c["date"])
-        if y == current_year and q == target_q_code: q_collection_done += c["amount"]
-
-    q_box1, q_box2, q_box3 = st.columns(3)
-    q_box1.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #3498db; border-radius:4px;'><h4>📌 当前考察季度</h4><h2 style='color:#3498db; font-size:20px;'>{selected_q}</h2></div>", unsafe_allow_html=True)
-    q_box2.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #2ecc71; border-radius:4px;'><h4>📈 该季度确认收入</h4><h2 style='color:#2ecc71; font-size:20px;'>¥{q_revenue_done:,.2f}</h2></div>", unsafe_allow_html=True)
-    q_box3.markdown(f"<div style='background-color:#f8f9fa; padding:15px; border-left:5px solid #9b59b6; border-radius:4px;'><h4>🏦 该季度实际催收到账回款</h4><h2 style='color:#9b59b6; font-size:20px;'>¥{q_collection_done:,.2f}</h2></div>", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    if q_revenue_done > 0 or q_collection_done > 0:
-        fig_q = px.bar(x=["季度确认收入数据", "季度回款数据"], y=[q_revenue_done, q_collection_done], color=["确收", "回款"], text_auto='.2f', labels={'x': '财务考评参数', 'y': '金额 (元)'}, title=f"📊 {selected_q} 确收与回款配比直方图")
-        st.plotly_chart(fig_q, use_container_width=True)
+    except: st.info("📊 历史演进柱状图动态加载中...")
 
 # ==========================================
 # 4. 页面 2: 综合业务台账
@@ -224,13 +207,10 @@ elif menu == "📝 综合业务台账":
     st.title("📝 综合业务拉通明细台账")
     st.markdown("### 🎛️ 数据中心快速过滤器")
     f_col1, f_col2, f_col3 = st.columns(3)
-    
     unique_projects = ["全部项目"] + sorted(list(set(p["name"] for p in projects.values())))
     unique_provinces = ["全部省份"] + sorted(list(set(o["province"] for o in orders.values())))
-    
     selected_project = f_col1.selectbox("🎯 按关联框架项目过滤：", unique_projects)
     selected_province = f_col2.selectbox("📍 按订单区域省份过滤：", unique_provinces)
-    
     today = date.today()
     start_of_year = date(today.year, 1, 1)
     date_range = f_col3.date_input("📅 筛选接单下发日期范围：", value=(start_of_year, today))
@@ -250,7 +230,6 @@ elif menu == "📝 综合业务台账":
         st.dataframe(df_p_view.style.map(lambda v: "background-color: #ffcccc; color: #cc0000; font-weight: bold;" if "🚨" in str(v) else ("background-color: #fff3cd; color: #856404; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["框架安全水位预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br><br>", unsafe_allow_html=True)
-
     st.subheader("🤝 已中标正式订单及【到货确收】追踪明细表")
     order_rows = []
     for oid, o in orders.items():
@@ -262,11 +241,9 @@ elif menu == "📝 综合业务台账":
             if isinstance(date_range, tuple) and len(date_range) == 2:
                 if not (date_range[0] <= o_date_obj <= date_range[1]): continue
         except: pass
-            
         uncollected = max(0.0, o["amt_with_tax"] - o["collect_total"])
         unrevenue = max(0.0, o["amt_with_tax"] - o["revenue_total"]) 
         order_rows.append({"订单编号": o["id"], "订单下发日期": o["date"], "区域省份": o["province"], "客户简称": o["client"], "订购产品明细": o["product"], "接单含税金额": o["amt_with_tax"], "订单项目名称": o["order_p_name"], "💡 累计已确认收入": o["revenue_total"], "⏳ 尚未收货未确收": unrevenue, "累计已回款": o["collect_total"], "待追收尾款": uncollected, "关联源头框架项目": related_p_name})
-        
     if order_rows:
         df_o_view = pd.DataFrame(order_rows)
         column_order = ["订单编号", "订单下发日期", "区域省份", "客户简称", "订购产品明细", "接单含税金额", "💡 累计已确认收入", "⏳ 尚未收货未确收", "累计已回款", "待追收尾款", "关联源头框架项目"]
@@ -296,17 +273,16 @@ elif menu == "➕ 业务数据维护中心":
                 p_target = st.number_input("3. 项目框架标的额 (元) *", min_value=0.0, step=10000.0)
                 p_stage = st.selectbox("4. 项目阶段 *", PROJECT_STAGES)
                 p_bid_date = st.date_input("5. 开标/签署时间 *", value=datetime.now()).strftime("%Y-%m-%d")
-
                 if st.form_submit_button("💾 确认保存至 Supabase"):
                     if not p_name or not p_client: st.error("❌ 项目名称和客户简称为必填项！")
                     else:
                         new_id = f"PRJ{int(datetime.now().timestamp())}"
                         payload = {"id": new_id, "name": p_name, "client": p_client, "target": p_target, "stage": p_stage, "bid_date": p_bid_date}
                         res = requests.post(f"{SB_URL}/rest/v1/projects", headers=HEADERS, json=payload, timeout=5)
-                        if res.status_code in [200, 201]: st.success(f"✔️ 框架项目【{p_name}】已经成功同步写入云端！"); st.cache_data.clear(); st.rerun()
+                        if res.status_code in [200, 201]: st.success(f"✔️ 框架项目成功同步！"); st.cache_data.clear(); st.rerun()
 
         elif sub_step == "🤝 中标订单录入":
-            if not projects: st.warning("⚠️ 暂无任何前置项目，请先完成【项目前期录入】！")
+            if not projects: st.warning("⚠️ 暂无任何前置项目！")
             else:
                 p_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
                 sel_p = st.selectbox("11. 关联源头框架项目 *", list(p_opts.keys()))
@@ -321,7 +297,6 @@ elif menu == "➕ 业务数据维护中心":
                 qty = cq.number_input("8. 数量 *", min_value=1, value=1)
                 amt_no_tax = price * qty
                 amt_with_tax = amt_no_tax * (1 + tax_rate)
-                st.info(f"📊 自动核税预览：不含税: ¥{amt_no_tax:,.2f} | 本次拟录含税额: ¥{amt_with_tax:,.2f}")
                 o_p_name = st.text_input("12. 对应订单项目名称 *")
 
                 if st.button("💾 确认保存订单"):
@@ -331,7 +306,7 @@ elif menu == "➕ 业务数据维护中心":
                         requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_ref}", headers=HEADERS, json={"stage": "已中标"}, timeout=5)
                         o_payload = {"id": o_id, "project_ref": pid_ref, "order_date": o_date, "province": o_province, "client": o_client, "product": o_product, "price_no_tax": price, "tax_rate": tax_rate, "quantity": qty, "amt_no_tax": amt_no_tax, "amt_with_tax": amt_with_tax, "order_p_name": o_p_name}
                         res = requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=o_payload, timeout=5)
-                        if res.status_code in [200, 201]: st.success(f"✔️ 中标正式合同订单 {o_id} 云端同步成功！"); st.cache_data.clear(); st.rerun()
+                        if res.status_code in [200, 201]: st.success(f"✔️ 订单 {o_id} 云端同步成功！"); st.cache_data.clear(); st.rerun()
 
         elif sub_step == "📈 确认收入到货登记":
             if not orders: st.warning("⚠️ 系统内暂无订单。")
@@ -352,16 +327,12 @@ elif menu == "➕ 业务数据维护中心":
             is_legacy_history = st.checkbox("⏳ 本次是核销【多年前的陈年遗留老账/挂账】")
             with st.form("c_form", clear_on_submit=True):
                 if not is_legacy_history:
-                    if not orders: 
-                        st.warning("⚠️ 系统内暂无订单。")
-                        st.form_submit_button("不可提交", disabled=True)
-                        raw_oid_input = ""
+                    if not orders: st.warning("⚠️ 系统内暂无订单。"); st.form_submit_button("不可提交", disabled=True); raw_oid_input = ""
                     else:
                         o_opts = {f"订单:{oid} (尾款:¥{o['amt_with_tax'] - o['collect_total']:.2f})": oid for oid, o in orders.items()}
-                        selected_order_labels = st.multiselect("1. 请选择本次合并结算包含的订单号（可多选框）*", list(o_opts.keys()))
+                        selected_order_labels = st.multiselect("1. 请选择本次合并结算包含的订单号*", list(o_opts.keys()))
                         raw_oid_input = ",".join([o_opts[lbl] for lbl in selected_order_labels])
-                else: 
-                    raw_oid_input = st.text_input("1. 手动精确输入历史客户订单号 *")
+                else: raw_oid_input = st.text_input("1. 手动精确输入历史客户订单号 *")
 
                 c_amt = st.number_input("2. 本次财务实际到账总回款额 (元) *", min_value=0.0)
                 c_date = st.date_input("3. 实际回款进账日期 *", value=datetime.now()).strftime("%Y-%m-%d")
@@ -398,13 +369,11 @@ elif menu == "➕ 业务数据维护中心":
                                     requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json={"id": target_id, "project_ref": None, "order_date": c_date, "province": "合并结算老账区", "client": "运营商历史长账", "product": "历史批量并单核销款", "price_no_tax": split_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": split_amt, "amt_with_tax": split_amt, "order_p_name": "批量遗留老账合并"}, timeout=5)
                                 each_payload = {"order_ref": target_id, "amount": split_amt, "collection_date": c_date, "invoice_no": f"{c_invoice}(多单合并自动拆分)" if c_invoice else "合并拆分流水"}
                                 requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=each_payload, timeout=5)
-                        st.success("🎉 回款处理完毕！已成功平摊账目流水！"); st.cache_data.clear(); st.rerun()
+                        st.success("🎉 回款处理完毕！"); st.cache_data.clear(); st.rerun()
 
-    # 修改功能
     elif op_type == "⚙️ 修改已有信息 (数据回显覆写)":
         edit_target = st.radio("请选择需要修改的内容类型：", ["🎯 修改框架项目", "🤝 修改订单明细"], horizontal=True)
         st.markdown("---")
-
         if edit_target == "🎯 修改框架项目":
             if not projects: st.info("云端暂无数据可修改")
             else:
@@ -418,14 +387,13 @@ elif menu == "➕ 业务数据维护中心":
                 except: old_dt = datetime.now()
                 up_p_date = st.date_input("开标时间", value=old_dt).strftime("%Y-%m-%d")
                 p_edit_reason = st.text_area("🔧 请硬性输入本次项目调整/修正的原因备注 * (必填)")
-
                 if st.button("💾 覆写并保存项目修改"):
                     if not p_edit_reason.strip(): st.error("❌ 必须填写修改原因才能提交！")
                     else:
                         trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {p_edit_reason.strip()}]"
                         up_payload = {"name": up_p_name, "client": up_p_client, "target": up_p_target, "stage": up_p_stage + trace_stamp, "bid_date": up_p_date}
                         res = requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
-                        if res.status_code in [200, 204]: st.success("🎉 框架项目已成功更正！"); st.cache_data.clear(); st.rerun()
+                        if res.status_code in [200, 204]: st.success("🎉 修改成功！"); st.cache_data.clear(); st.rerun()
 
         elif edit_target == "🤝 修改订单明细":
             if not orders: st.info("云端暂无订单数据可修改")
@@ -434,7 +402,7 @@ elif menu == "➕ 业务数据维护中心":
                 sel_edit_o = st.selectbox("请选择要更正的正式订单：", list(o_edit_opts.keys())); oid_edit = o_edit_opts[sel_edit_o]; old_o = orders[oid_edit]
                 up_o_province = st.text_input("省份", value=old_o["province"])
                 up_o_client = st.text_input("客户简称", value=old_o["client"])
-                up_o_product = st.text_input("订单产品(去除旧留档后缀)", value=old_o["product"].split(" [修改痕迹")[0])
+                up_o_product = st.text_input("订单产品", value=old_o["product"].split(" [修改痕迹")[0])
                 up_o_p_name = st.text_input("订单项目名称", value=old_o["order_p_name"])
                 cep, cer, ceq = st.columns(3)
                 up_price = cep.number_input("单价(不含税)", min_value=0.0, value=old_o["price_no_tax"])
@@ -446,166 +414,179 @@ elif menu == "➕ 业务数据维护中心":
                 except: old_o_dt = datetime.now()
                 up_o_date = st.date_input("订单日期", value=old_o_dt).strftime("%Y-%m-%d")
                 o_edit_reason = st.text_area("🔧 请硬性输入本次订单调整/修正的原因备注 * (必填)")
-
                 if st.button("💾 覆写并保存订单修改"):
                     if not o_edit_reason.strip(): st.error("❌ 必须填写修改原因才能提交！")
                     else:
                         trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {o_edit_reason.strip()}]"
                         up_o_payload = {"province": up_o_province, "client": up_o_client, "product": up_o_product + trace_stamp, "order_p_name": up_o_p_name, "price_no_tax": up_price, "tax_rate": up_tax_rate, "quantity": up_qty, "amt_no_tax": new_no_tax, "amt_with_tax": new_tax_in, "order_date": up_o_date}
                         res = requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
-                        if res.status_code in [200, 204]: st.success("🎉 订单财务明细已成功更正！"); st.cache_data.clear(); st.rerun()
+                        if res.status_code in [200, 204]: st.success("🎉 修改成功！"); st.cache_data.clear(); st.rerun()
 
 # ==========================================
-# 6. 💾 往年库容释放与数据导出中心 (年份严格熔断控制)
+# 6. 💡 核心新增：🏦 复式财务管理中心 (hledger 灵魂克隆)
+# ==========================================
+elif menu == "🏦 复式财务管理中心":
+    st.title("🏦 个人与家庭复式财务账本中心 (hledger 云驱动)")
+    st.markdown("基于复式记账法原理，确保账目借贷平衡。支持多层级账户结构与 `#动态业务标签` 穿透过滤。")
+    
+    f_tabs = st.tabs(["📊 个人财务分析大屏", "📝 复式分录明细账", "✍️ 极速记账报销填报"])
+    
+    # --- 选项卡 A：分析大屏 ---
+    with f_tabs[0]:
+        st.subheader("📊 个人资产与专项开销多维透视")
+        if not ledgers:
+            st.info("暂无复式记账明细，请先前往第三个选项卡完成首笔收支登记。")
+        else:
+            df_l = pd.DataFrame(ledgers)
+            df_l["date"] = pd.to_datetime(df_l["date"])
+            
+            # 统计不同消费分类的总开销 (看去向账户 Expenses)
+            df_exp = df_l[df_l["account_to"].str.startswith("Expenses:")]
+            
+            sc1, sc2 = st.columns(2)
+            with sc1:
+                st.markdown("#### 🍕 不同消费去向账户树构成")
+                if not df_exp.empty:
+                    fig_pie_l = px.pie(df_exp, names="account_to", values="amount", hole=0.3, color_discrete_sequence=px.colors.qualitative.Pastel)
+                    st.plotly_chart(fig_pie_l, use_container_width=True)
+                else: st.text("本月暂无费用去向性支出数据。")
+                
+            with sc2:
+                st.markdown("#### 🏷️ hledger 动态业务标签专项看盘")
+                # 智能提取标签 (养育、装修、食物等)
+                tag_stats = {"小孩养育 (#child)": 0.0, "房屋装修 (#decor)": 0.0, "差旅报销 (#reimburse)": 0.0}
+                for _, row in df_l.iterrows():
+                    t_str = str(row["tags"]).lower()
+                    if "child" in t_str: tag_stats["小孩养育 (#child)"] += row["amount"]
+                    if "decor" in t_str: tag_stats["房屋装修 (#decor)"] += row["amount"]
+                    if "reimburse" in t_str: tag_stats["差旅报销 (#reimburse)"] += row["amount"]
+                
+                df_tags = pd.DataFrame(list(tag_stats.items()), columns=["核心专项标签", "累计发生金额"])
+                fig_tag_bar = px.bar(df_tags, x="核心专项标签", y="累计发生金额", text_auto=True, color="核心专项标签", color_discrete_sequence=["#e74c3c", "#f39c12", "#3498db"])
+                st.plotly_chart(fig_tag_bar, use_container_width=True)
+
+    # --- 选项卡 B：明细账目展示 ---
+    with f_tabs[1]:
+        st.subheader("📜 复式记账标准日记账 (Journal)")
+        if ledgers:
+            df_journal = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
+            df_journal.columns = ["交易日期", "交易描述", "资金来源账户 (贷)", "资金去向账户 (借)", "发生金额(元)", "hledger动态标签", "详细备注"]
+            st.dataframe(df_journal, use_container_width=True, hide_index=True)
+        else: st.info("目前还没有账目流水。")
+
+    # --- 选项卡 C：极速记账报销填报 ---
+    with f_tabs[2]:
+        st.subheader("✍️ 新建标准复式收支/报销流水分录")
+        with st.form("ledger_form", clear_on_submit=True):
+            l_date = st.date_input("1. 交易日期", value=datetime.now()).strftime("%Y-%m-%d")
+            l_desc = st.text_input("2. 交易描述/商户名称 *", placeholder="例如：山姆会员店购买奶粉、宜家卫浴采购")
+            
+            l_col1, l_col2, l_col3 = st.columns(3)
+            l_from = l_col1.selectbox("3. 资金来源账户(FROM) *", DEFAULT_ACCOUNTS, index=0)
+            l_to = l_col2.selectbox("4. 资金去向账户(TO) *", DEFAULT_ACCOUNTS, index=5)
+            l_amt = l_col3.number_input("5. 发生金额(元) *", min_value=0.01, step=10.0)
+            
+            st.markdown("**6. 选择智能匹配的 hledger 动态业务分析标签（可多选）:**")
+            tag_child = st.checkbox("👶 小孩养育专项统计 (自动内嵌 #child 标签)")
+            tag_decor = st.checkbox("🏡 房屋装修专项统计 (自动内嵌 #decor 标签)")
+            tag_reimburse = st.checkbox("🧾 差旅商务报销追踪 (自动内嵌 #reimburse 标签)")
+            
+            l_comment = st.text_input("7. 附加详细备注")
+            
+            if st.form_submit_button("💾 同步写入复式云端账本"):
+                if not l_desc or l_amt <= 0: st.error("❌ 交易描述和金额为核心必填项！")
+                else:
+                    # 标签序列化拼接引擎
+                    tag_list = []
+                    if tag_child: tag_list.append("child")
+                    if tag_decor: tag_list.append("decor")
+                    if tag_reimburse: tag_list.append("reimburse")
+                    final_tags = ",".join(tag_list)
+                    
+                    l_payload = {
+                        "tx_date": l_date, "description": l_desc, "account_from": l_from,
+                        "account_to": l_to, "amount": l_amt, "tags": final_tags, "comment": l_comment
+                    }
+                    res = requests.post(f"{SB_URL}/rest/v1/ledger_entries", headers=HEADERS, json=l_payload, timeout=5)
+                    if res.status_code in [200, 201]:
+                        st.success("🎉 复式记账借贷分录已成功写入云端！借贷平衡，资产流转正常！")
+                        st.cache_data.clear(); st.rerun()
+                    else: st.error(f"写入失败: {res.text}")
+
+# ==========================================
+# 7. 💾 往年库容释放与数据导出中心 (年份熔断逻辑闭环)
 # ==========================================
 elif menu == "💾 往年库容释放与数据导出":
     st.title("💾 往年库容释放与本地 MySQL 数据归档备份中心")
-    st.markdown("为了保证公网 Supabase 500MB 免费额度永不超标，您可以在此一键拉取并导出特定年份的细分台账。")
-    
     export_year = st.selectbox("请选择要批量处理的业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
     st.write(f"📡 正在动态扫描 `{export_year}` 年的公网云端留存台账...")
 
-    # 数据过滤归集
     p_exported = [{"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]} for p in projects.values() if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year]
     o_exported = [{"id": o["id"], "project_ref": o["p_ref"], "order_date": o["date"], "province": o["province"], "client": o["client"], "product": o["product"], "price_no_tax": o["price_no_tax"], "tax_rate": o["tax_rate"], "quantity": o["quantity"], "amt_no_tax": o["amt_no_tax"], "amt_with_tax": o["amt_with_tax"], "order_p_name": o["order_p_name"]} for o in orders.values() if datetime.strptime(o["date"], "%Y-%m-%d").year == export_year]
     c_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "collection_date": row["date"], "invoice_no": row["invoice_no"]} for row in collections if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
     r_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "revenue_date": row["date"]} for row in revenues if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
 
-    df_export_p = pd.DataFrame(p_exported)
-    df_export_o = pd.DataFrame(o_exported)
-    df_export_c = pd.DataFrame(c_exported)
-    df_export_r = pd.DataFrame(r_exported)
+    df_export_p = pd.DataFrame(p_exported); df_export_o = pd.DataFrame(o_exported); df_export_c = pd.DataFrame(c_exported); df_export_r = pd.DataFrame(r_exported)
 
-    def make_csv_buffer(df):
-        if df.empty: return None
-        buffer = io.StringIO()
-        df.to_csv(buffer, index=False, encoding='utf-8-sig')
-        return buffer.getvalue()
-
-    # 展示并提供下载 CSV 功能
     dl_col1, dl_col2, dl_col3, dl_col4 = st.columns(4)
-
     with dl_col1:
-        st.metric("1. 框架项目数", len(p_exported))
         csv_p = make_csv_buffer(df_export_p)
         if csv_p: st.download_button(f"📥 下载 projects_{export_year}.csv", csv_p, f"mysql_projects_{export_year}.csv", "text/csv")
-        
     with dl_col2:
-        st.metric("2. 正式订单数", len(o_exported))
         csv_o = make_csv_buffer(df_export_o)
         if csv_o: st.download_button(f"📥 下载 orders_{export_year}.csv", csv_o, f"mysql_orders_{export_year}.csv", "text/csv")
-
     with dl_col3:
-        st.metric("3. 回款到账流水", len(c_exported))
         csv_c = make_csv_buffer(df_export_c)
         if csv_c: st.download_button(f"📥 下载 collections_{export_year}.csv", csv_c, f"mysql_collections_{export_year}.csv", "text/csv")
-
     with dl_col4:
-        st.metric("4. 网签确收流水", len(r_exported))
         csv_r = make_csv_buffer(df_export_r)
         if csv_r: st.download_button(f"📥 下载 revenues_{export_year}.csv", csv_r, f"mysql_revenues_{export_year}.csv", "text/csv")
 
     st.markdown("---")
-    
-    # 🚨 核心升级：按年区分删除，禁止删除当年及未来数据
     st.subheader("🚨 线上云容清空释放执行中心")
     
-    # 判断当前选择的年份是否允许执行清空操作
+    # 💡 核心检查：如果选择的年份大于等于今年，强制触发物理熔断
     if export_year >= system_current_year:
-        st.error(f"🔒 **物理删除硬熔断锁死**：您当前选择的年份是 `{export_year}` 年（属于当前正在经营或未来的年度）。根据安全审计规则，删除操作**仅限于往年历史陈旧数据**。当前 {system_current_year} 年的数据已被系统自动锁定、无法清空！")
+        st.error(f"🔒 **物理删除硬熔断锁死**：您选择的 `{export_year}` 年属于当前正在经营的活跃年度。禁止执行删除！当前 {system_current_year} 年的数据已被系统保护。")
     else:
-        st.warning(f"⚠️ 允许执行：您当前选择的是往年历史数据（{export_year} 年）。清空后不可逆！")
-        
-        # 强制下载双确认勾选框
-        confirm_downloaded = st.checkbox(f"🔴 **我发誓确认：我刚才已经点击上方按钮下载了 {export_year} 历史年的全部明细 CSV 文件，且已经在本地 MySQL 中成功归档，现在请求立刻清空该年度云端内存，释放云容量！**")
+        st.warning(f"⚠️ 允许执行：您当前选择的是历史账目（{export_year} 年）。清空后云端数据不可恢复！")
+        confirm_downloaded = st.checkbox(f"🔴 **我发誓确认：我刚才已经点击上方按钮下载了 {export_year} 历史年的全部明细 CSV 文件，且已经在本地 MySQL 中成功归档！**")
         
         if confirm_downloaded:
             st.info("🔓 安全断路器已解开。请仔细核对需要物理抹除的数据条数：")
             del_btn_col1, del_btn_col2, del_btn_col3, del_btn_col4 = st.columns(4)
-            
             with del_btn_col1:
                 if not df_export_p.empty:
                     if st.button(f"🗑️ 物理粉碎云端 {export_year} 项目数据", type="primary"):
                         res = requests.delete(f"{SB_URL}/rest/v1/projects?bid_date=gte.{export_year}-01-01&bid_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
-                else: st.text("❌ 无可删数据")
-                
+                        if res.status_code in [200, 204]: st.success("清空成功！"); st.cache_data.clear(); st.rerun()
             with del_btn_col2:
                 if not df_export_o.empty:
                     if st.button(f"🗑️ 物理粉碎云端 {export_year} 订单数据", type="primary"):
                         res = requests.delete(f"{SB_URL}/rest/v1/orders?order_date=gte.{export_year}-01-01&order_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
-                else: st.text("❌ 无可删数据")
-                
+                        if res.status_code in [200, 204]: st.success("清空成功！"); st.cache_data.clear(); st.rerun()
             with del_btn_col3:
                 if not df_export_c.empty:
                     if st.button(f"🗑️ 物理粉碎云端 {export_year} 回款数据", type="primary"):
                         res = requests.delete(f"{SB_URL}/rest/v1/collections?collection_date=gte.{export_year}-01-01&collection_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
-                else: st.text("❌ 无可删数据")
-                
+                        if res.status_code in [200, 204]: st.success("清空成功！"); st.cache_data.clear(); st.rerun()
             with del_btn_col4:
                 if not df_export_r.empty:
                     if st.button(f"🗑️ 物理粉碎云端 {export_year} 确收数据", type="primary"):
                         res = requests.delete(f"{SB_URL}/rest/v1/revenues?revenue_date=gte.{export_year}-01-01&revenue_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
-                else: st.text("❌ 无可删数据")
-        else:
-            st.code("🔒 线上擦除器处于保护状态。请先勾选上方的“我发誓确认...”安全声明，以解除保护。")
+                        if res.status_code in [200, 204]: st.success("清空成功！"); st.cache_data.clear(); st.rerun()
+        else: st.code("🔒 线上擦除器处于保护状态。请先勾选安全承诺声明。")
 
     st.markdown("---")
-    
-    # 本地 MySQL 一键建表 DDL 工具区
-    with st.expander("🛠️ 附录：本地 MySQL 一键建表标准 SQL 语句（DDL）"):
-        st.markdown("如果您在本地物理电脑搭建了 MySQL 数据库，在第一次导入上述生成的 CSV 前，请先在本地执行以下标准的建表命令：")
-        mysql_ddl_code = """-- 1. 创建本地销售数据库
-CREATE DATABASE IF NOT EXISTS sale_archive_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE sale_archive_db;
-
--- 2. 建立框架项目表
-CREATE TABLE `projects` (
-  `id` varchar(64) NOT NULL,
-  `name` varchar(255) DEFAULT NULL,
-  `client` varchar(255) DEFAULT NULL,
-  `target` decimal(16,2) DEFAULT '0.00',
-  `stage` varchar(100) DEFAULT NULL,
-  `bid_date` date DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 3. 建立中标订单表
-CREATE TABLE `orders` (
-  `id` varchar(64) NOT NULL,
-  `project_ref` varchar(64) DEFAULT NULL,
-  `order_date` date DEFAULT NULL,
-  `province` varchar(100) DEFAULT NULL,
-  `client` varchar(255) DEFAULT NULL,
-  `product` text,
-  `price_no_tax` decimal(16,2) DEFAULT '0.00',
-  `tax_rate` decimal(5,4) DEFAULT '0.0000',
-  `quantity` int(11) DEFAULT '1',
-  `amt_no_tax` decimal(16,2) DEFAULT '0.00',
-  `amt_with_tax` decimal(16,2) DEFAULT '0.00',
-  `order_p_name` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 4. 建立到账回款表
-CREATE TABLE `collections` (
+    with st.expander("🛠 `ledger_entries` 本地 MySQL 历史备份建表 DDL （若有需要）"):
+        st.code("""CREATE TABLE `ledger_entries` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
-  `order_ref` varchar(64) DEFAULT NULL,
-  `amount` decimal(16,2) DEFAULT '0.00',
-  `collection_date` date DEFAULT NULL,
-  `invoice_no` varchar(100) DEFAULT NULL,
+  `tx_date` date DEFAULT NULL,
+  `description` varchar(255) DEFAULT NULL,
+  `account_from` varchar(100) DEFAULT NULL,
+  `account_to` varchar(100) DEFAULT NULL,
+  `amount` decimal(15,2) DEFAULT '0.00',
+  `tags` varchar(255) DEFAULT NULL,
+  `comment` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 5. 建立确认收入表
-CREATE TABLE `revenues` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `order_ref` varchar(64) DEFAULT NULL,
-  `amount` decimal(16,2) DEFAULT '0.00',
-  `revenue_date` date DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"""
-        st.code(mysql_ddl_code, language="sql")
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;""", language="sql")
