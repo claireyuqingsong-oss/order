@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -55,7 +56,8 @@ def load_db_data():
                 "client": row['client'], "product": row['product'], "price_no_tax": float(row['price_no_tax']),
                 "tax_rate": float(row['tax_rate']), "quantity": int(row['quantity']),
                 "amt_no_tax": float(row['amt_no_tax']), "amt_with_tax": float(row['amt_with_tax']),
-                "p_ref": row['project_ref'], "order_p_name": row['order_p_name'], "collect_total": 0.0
+                "p_ref": row.get('project_ref'), "order_p_name": row['order_p_name'], "collect_total": 0.0,
+                "is_history": row.get('project_ref') is None # 💡 标记是否为历史老订单
             }
         
     collections_list = []
@@ -70,14 +72,14 @@ def load_db_data():
         
     # 交叉核算多表联动财务逻辑
     for oid, o in orders_dict.items():
-        if o["p_ref"] in projects_dict:
+        if o["p_ref"] and o["p_ref"] in projects_dict:
             projects_dict[o["p_ref"]]["amt_with_tax_total"] += o["amt_with_tax"]
             
     for c in collections_list:
         if c["o_ref"] in orders_dict:
             orders_dict[c["o_ref"]]["collect_total"] += c["amount"]
             p_ref = orders_dict[c["o_ref"]]["p_ref"]
-            if p_ref in projects_dict:
+            if p_ref and p_ref in projects_dict:
                 projects_dict[p_ref]["collect_total"] += c["amount"]
 
     return projects_dict, orders_dict, collections_list
@@ -94,27 +96,37 @@ st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏 (回款率算法防护)
+# 3. 页面 1: 业绩与KPI大屏 (核心修改：完美隔离历史老账算法)
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("📊 通信销售业绩与交付管道大屏")
     
+    # 1. 前期跟进标的求和
     pipeline_target = sum(p["target"] for p in projects.values() if p["stage"] != "已中标")
+    
+    # 2. 累计税后订单金额：按实际录入的所有订单金额求和（包含主线和历史老账，确保基础数据对得上）
     total_order_tax_in = sum(o["amt_with_tax"] for o in orders.values())
+    
+    # 3. 累计回款到账：按录入的所有回款金额无条件累加（财务进账纯流水）
     total_collected = sum(c["amount"] for c in collections)
     
-    # 财务算法安全防御
-    if total_collected > total_order_tax_in:
-        total_order_tax_in = total_collected  # 极端防护逻辑
-        
-    total_uncollected = max(0.0, total_order_tax_in - total_collected)
-    rate = (total_collected / total_order_tax_in * 100) if total_order_tax_in > 0 else 0.0
+    # 💡 4. 核心隔离算法：整体合同回款率计算（剔除老账干扰）
+    # 分母：仅计算系统正常主线业务的订单总额
+    main_order_total = sum(o["amt_with_tax"] for o in orders.values() if not o["is_history"])
+    # 分子：仅计算系统正常主线业务已收到的回款额
+    main_collected_total = sum(o["collect_total"] for o in orders.values() if not o["is_history"])
+    
+    # 真实计算当下核心业务的回款率
+    rate = (main_collected_total / main_order_total * 100) if main_order_total > 0 else 0.0
+    
+    # 真实计算当下核心业务的待催收尾款
+    main_uncollected = max(0.0, main_order_total - main_collected_total)
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("跟进中项目预估标的", f"¥{pipeline_target:,.2f}")
     col2.metric("累计税后订单/合计数", f"¥{total_order_tax_in:,.2f}")
-    col3.metric("累计回款到账", f"¥{total_collected:,.2f}")
-    col4.metric("整体合同回款率", f"{rate:.1f}%")
+    col3.metric("累计回款到账(含历史老账)", f"¥{total_collected:,.2f}")
+    col4.metric("核心业务合同回款率", f"{rate:.1f}%", help="此指标已自动为您隔离多年前历史老账回款的污染，精准考核主线业务催收率。")
 
     st.markdown("---")
     g1, g2 = st.columns(2)
@@ -128,12 +140,12 @@ if menu == "📊 业绩与KPI大屏":
         else:
             st.info("暂无售前项目管道分布数据")
     with g2:
-        st.subheader("💰 整体已中标订单回款健康度")
-        if total_order_tax_in > 0:
-            fig_pie = px.pie(names=["已到账回款", "待收回尾款"], values=[total_collected, total_uncollected], color_discrete_sequence=["#2ecc71", "#e74c3c"], hole=0.4)
+        st.subheader("💰 核心主线业务回款健康度")
+        if main_order_total > 0:
+            fig_pie = px.pie(names=["主线已到账", "主线待追收尾款"], values=[main_collected_total, main_uncollected], color_discrete_sequence=["#2ecc71", "#e74c3c"], hole=0.4)
             st.plotly_chart(fig_pie, use_container_width=True)
         else:
-            st.info("暂无正式中标合同生成财务图表")
+            st.info("暂无核心正式合同订单生成财务图表")
 
 # ==========================================
 # 4. 页面 2: 综合业务台账 
@@ -197,7 +209,7 @@ elif menu == "📝 综合业务台账":
     st.subheader("🤝 已中标正式订单明细表")
     order_rows = []
     for oid, o in orders.items():
-        related_p_name = projects[o["p_ref"]]["name"] if o["p_ref"] in projects else "历史/补录归档项目"
+        related_p_name = projects[o["p_ref"]]["name"] if o["p_ref"] and o["p_ref"] in projects else "历史老账/无需补录项目"
         
         if selected_project != "全部项目" and related_p_name != selected_project:
             continue
@@ -241,7 +253,7 @@ elif menu == "📝 综合业务台账":
         st.info("暂无符合筛选条件的正式合同订单数据")
 
 # ==========================================
-# 5. 页面 3: 业务数据维护中心 (加入智能对冲引擎)
+# 5. 页面 3: 业务数据维护中心
 # ==========================================
 elif menu == "➕ 业务数据维护中心":
     st.title("🛠️ 业务数据全生命周期维护中心")
@@ -338,27 +350,25 @@ elif menu == "➕ 业务数据维护中心":
                     elif c_amt <= 0: 
                         st.error("❌ 回款金额需大于0元！")
                     else:
-                        # 💡 智能财务对冲引擎逻辑：
-                        # 如果是手动录入的陈年老订单，系统自动去 orders 表里查。如果查不到，静默秒级补建一张对应的 100% 回款对冲虚拟订单，完美锁死回款率平衡！
+                        # 💡 完美的历史与现实对冲隔离机制：
                         if is_manual_order and (cleaned_oid not in orders):
                             hedge_payload = {
                                 "id": cleaned_oid,
-                                "project_ref": None,  # 无前置项目
+                                "project_ref": None,  # 🌟 关键：不关联任何项目，标记为纯历史归档订单
                                 "order_date": c_date,
-                                "province": "历史归档区",
-                                "client": "历史老客户",
-                                "product": "历史归档业务（老账回款自动对冲生成）",
+                                "province": "历史老账归档区",
+                                "client": "历史长账龄客户",
+                                "product": "跨年历史账目结转款（无需补录明细）",
                                 "price_no_tax": c_amt,
                                 "tax_rate": 0.0,
                                 "quantity": 1,
                                 "amt_no_tax": c_amt,
                                 "amt_with_tax": c_amt,
-                                "order_p_name": "历史跨年账目"
+                                "order_p_name": "多年前老订单挂账"
                             }
-                            # 静默向云端发送对冲基础订单
                             requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=hedge_payload, timeout=5)
                         
-                        # 执行标准回款流水登记
+                        # 标准流水登记
                         c_payload = {
                             "order_ref": cleaned_oid, 
                             "amount": c_amt, 
@@ -367,7 +377,7 @@ elif menu == "➕ 业务数据维护中心":
                         }
                         res = requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
                         if res.status_code in [200, 201]:
-                            st.success("🎉 回款账目及发票凭证已安全销账，且大屏KPI对冲防护引擎已成功激活！")
+                            st.success("🎉 数据安全入库！大屏【主线核心业务回款率】已启用纯净隔离过滤算法！")
                             st.cache_data.clear()
                             st.rerun()
                         else:
