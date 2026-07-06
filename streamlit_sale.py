@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -120,8 +119,7 @@ def get_quarter(date_str):
 st.sidebar.title("📱 通信销售云工作台")
 st.sidebar.markdown("💡 **数据同步引擎**：`🟢 Supabase REST 高速通道已就绪`")
 
-# 📊 自动识别当前年份系统，支持手动任意动态调整的 KPI 目标设置按钮区
-# 💡 升级：从系统时间自动提取实际年份，不写死
+# 📊 自动识别当前实际年份，大屏根据此年份自动更新达成看板
 system_current_year = datetime.now().year
 
 with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
@@ -132,24 +130,23 @@ with st.sidebar.expander("⚙️ 运营大屏 KPI 考核目标设置"):
 menu = st.sidebar.radio("功能导航", ["📊 业绩与KPI大屏", "📝 综合业务台账", "➕ 业务数据维护中心", "💾 往年库容释放与数据导出"])
 
 # ==========================================
-# 3. 页面 1: 业绩与KPI大屏
+# 3. 页面 1: 业绩与KPI大屏 (动态自动关联年份)
 # ==========================================
 if menu == "📊 业绩与KPI大屏":
     st.title("🏆 销售业绩与年/季双轨 KPI 战略大屏")
     
-    current_year = system_current_year # 💡 自动联动系统实际年份
+    current_year = system_current_year # 💡 根据系统年份自动切换大屏目标，永不写死
     
-    # 抓取今年最新 Supabase 云端确收与回款数据
+    # 动态抓取当前实际年份的 Supabase 确收与回款数据
     annual_revenue_done = sum(r["amount"] for r in revenues if datetime.strptime(r["date"], "%Y-%m-%d").year == current_year)
     annual_collection_done = sum(c["amount"] for c in collections if datetime.strptime(c["date"], "%Y-%m-%d").year == current_year)
     
-    # 算当年达成率
+    # 动态计算达成率
     rev_annual_rate = (annual_revenue_done / cfg_rev) if cfg_rev > 0 else 0.0
     col_annual_rate = (annual_collection_done / cfg_col) if cfg_col > 0 else 0.0
 
     st.markdown(f"### 📅 {current_year}年度动态 KPI 达成看板")
     
-    # 💡 彻底修复手机端排版遮挡：精简自适应 HTML 布局
     def render_custom_metric(title, value, sub_text=""):
         return f"""
         <div style="background-color:#f8f9fa; padding:12px; border-radius:6px; border:1px solid #e9ecef; text-align:center; min-height:100px;">
@@ -160,20 +157,19 @@ if menu == "📊 业绩与KPI大屏":
         """
         
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-    m_col1.markdown(render_custom_metric("年度确认收入目标", f"¥{cfg_rev:,.2f}"), unsafe_allow_html=True)
+    m_col1.markdown(render_custom_metric(f"{current_year}年度确收目标", f"¥{cfg_rev:,.2f}"), unsafe_allow_html=True)
     m_col2.markdown(render_custom_metric("当前已确收(已到货)", f"¥{annual_revenue_done:,.2f}", f"已达成 {rev_annual_rate*100:.1f}%"), unsafe_allow_html=True)
-    m_col3.markdown(render_custom_metric("年度回款到账目标", f"¥{cfg_col:,.2f}"), unsafe_allow_html=True)
+    m_col3.markdown(render_custom_metric(f"{current_year}年度回款目标", f"¥{cfg_col:,.2f}"), unsafe_allow_html=True)
     m_col4.markdown(render_custom_metric("全年度累计到账回款", f"¥{annual_collection_done:,.2f}", f"已达成 {col_annual_rate*100:.1f}%"), unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("**🎯 年度确收 KPI 进度:**")
+    st.markdown(f"**🎯 {current_year}年度确收 KPI 进度:**")
     st.progress(min(1.0, rev_annual_rate))
-    st.markdown("**🏦 年度回款 KPI 进度:**")
+    st.markdown(f"**🏦 {current_year}年度回款 KPI 进度:**")
     st.progress(min(1.0, col_annual_rate))
     
     st.markdown("---")
 
-    # --- 💡 核心保护：往年历史离线结转大盘数据融合 (已彻底阻断 TypeError) ---
     st.markdown("### 📜 往年跨断代历史业绩结转看盘")
     
     history_list = []
@@ -182,8 +178,6 @@ if menu == "📊 业绩与KPI大屏":
     history_list.append({"年份": f"{current_year}年(今年实时)", "确认收入": float(annual_revenue_done), "到账回款": float(annual_collection_done)})
     
     df_history_chart = pd.DataFrame(history_list)
-    
-    # 强行转型清洗，防止空值破坏 Plotly 数据解析
     df_history_chart["确认收入"] = pd.to_numeric(df_history_chart["确认收入"]).fillna(0.0)
     df_history_chart["到账回款"] = pd.to_numeric(df_history_chart["到账回款"]).fillna(0.0)
     
@@ -200,7 +194,6 @@ if menu == "📊 业绩与KPI大屏":
     
     st.markdown("---")
 
-    # --- 季度 KPI 自由筛选追踪面板 ---
     st.markdown("### 🔍 季度 KPI 财务战果穿透查询")
     selected_q = st.selectbox("请选择需要复盘的特定季度：", [f"{current_year}年 Q1 (1-3月)", f"{current_year}年 Q2 (4-6月)", f"{current_year}年 Q3 (7-9月)", f"{current_year}年 Q4 (10-12月)"], index=2)
     target_q_code = selected_q.split(" ")[1]
@@ -463,136 +456,15 @@ elif menu == "➕ 业务数据维护中心":
                         if res.status_code in [200, 204]: st.success("🎉 订单财务明细已成功更正！"); st.cache_data.clear(); st.rerun()
 
 # ==========================================
-# 6. 💡 新增独立页面: 往年库容释放与本地 MySQL 数据导出中心
+# 6. 💾 往年库容释放与数据导出中心 (年份严格熔断控制)
 # ==========================================
 elif menu == "💾 往年库容释放与数据导出":
     st.title("💾 往年库容释放与本地 MySQL 数据归档备份中心")
-    st.markdown("为了保证公网 Supabase 500MB 免费额度永不超标，您可以在此一键拉取并导出当前年份在云端存储的所有细分台账。导出的格式完全兼容 **MySQL 的本地数据库直接导入**。")
+    st.markdown("为了保证公网 Supabase 500MB 免费额度永不超标，您可以在此一键拉取并导出特定年份的细分台账。")
     
-    # 允许选择年份导出（默认当前年份）
-    export_year = st.selectbox("请选择要批量导出的业务年份数据：", list(range(system_current_year-2, system_current_year+2)), index=2)
-    st.write(f"正在扫描并打包 `{export_year}` 年的云端台账...")
+    export_year = st.selectbox("请选择要批量处理的业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
+    st.write(f"📡 正在动态扫描 `{export_year}` 年的公网云端留存台账...")
 
-    # 从原始通过官方 API 拿到的结构中过滤指定年份的数据
-    # 1. 框架项目
-    p_exported = []
-    for p in projects.values():
-        try:
-            if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year:
-                p_exported.append({"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]})
-        except: pass
-    df_export_p = pd.DataFrame(p_exported)
-
-    # 2. 订单
-    o_exported = []
-    for o in orders.values():
-        try:
-            if datetime.strptime(o["date"], "%Y-%m-%d").year == export_year:
-                o_exported.append({"id": o["id"], "project_ref": o["p_ref"], "order_date": o["date"], "province": o["province"], "client": o["client"], "product": o["product"], "price_no_tax": o["price_no_tax"], "tax_rate": o["tax_rate"], "quantity": o["quantity"], "amt_no_tax": o["amt_no_tax"], "amt_with_tax": o["amt_with_tax"], "order_p_name": o["order_p_name"]})
-        except: pass
-    df_export_o = pd.DataFrame(o_exported)
-
-    # 3. 回款
-    c_exported = []
-    for row in collections:
-        try:
-            if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year:
-                c_exported.append({"order_ref": row["o_ref"], "amount": row["amount"], "collection_date": row["date"], "invoice_no": row["invoice_no"]})
-        except: pass
-    df_export_c = pd.DataFrame(c_exported)
-
-    # 4. 确收收入
-    r_exported = []
-    for row in revenues:
-        try:
-            if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year:
-                r_exported.append({"order_ref": row["o_ref"], "amount": row["amount"], "revenue_date": row["date"]})
-        except: pass
-    df_export_r = pd.DataFrame(r_exported)
-
-    # 渲染下载界面排版
-    dl_col1, dl_col2, dl_col3, dl_col4 = st.columns(4)
-
-    def make_csv_buffer(df):
-        if df.empty: return None
-        buffer = io.StringIO()
-        df.to_csv(buffer, index=False, encoding='utf-8-sig')
-        return buffer.getvalue()
-
-    with dl_col1:
-        st.metric("1. 框架项目数", len(p_exported))
-        csv_p = make_csv_buffer(df_export_p)
-        if csv_p: st.download_button(f"📥 下载 projects_{export_year}.csv", csv_p, f"mysql_projects_{export_year}.csv", "text/csv")
-        
-    with dl_col2:
-        st.metric("2. 正式订单数", len(o_exported))
-        csv_o = make_csv_buffer(df_export_o)
-        if csv_o: st.download_button(f"📥 下载 orders_{export_year}.csv", csv_o, f"mysql_orders_{export_year}.csv", "text/csv")
-
-    with dl_col3:
-        st.metric("3. 回款到账流水", len(c_exported))
-        csv_c = make_csv_buffer(df_export_c)
-        if csv_c: st.download_button(f"📥 下载 collections_{export_year}.csv", csv_c, f"mysql_collections_{export_year}.csv", "text/csv")
-
-    with dl_col4:
-        st.metric("4. 网签确收流水", len(r_exported))
-        csv_r = make_csv_buffer(df_export_r)
-        if csv_r: st.download_button(f"📥 下载 revenues_{export_year}.csv", csv_r, f"mysql_revenues_{export_year}.csv", "text/csv")
-
-    st.markdown("---")
-    
-    # 贴心附送：本地 MySQL 一键建表 DDL 工具区
-    with st.expander("🛠️ 查看本地 MySQL 一键建表标准 SQL 语句（DDL）"):
-        st.markdown("如果您在本地物理电脑搭建了 MySQL 数据库，在第一次导入上述生成的 CSV 前，请先在本地执行以下标准的建表命令：")
-        mysql_ddl_code = """-- 1. 创建本地销售数据库
-CREATE DATABASE IF NOT EXISTS sale_archive_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE sale_archive_db;
-
--- 2. 建立框架项目表
-CREATE TABLE `projects` (
-  `id` varchar(64) NOT NULL,
-  `name` varchar(255) DEFAULT NULL,
-  `client` varchar(255) DEFAULT NULL,
-  `target` decimal(16,2) DEFAULT '0.00',
-  `stage` varchar(100) DEFAULT NULL,
-  `bid_date` date DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 3. 建立中标订单表
-CREATE TABLE `orders` (
-  `id` varchar(64) NOT NULL,
-  `project_ref` varchar(64) DEFAULT NULL,
-  `order_date` date DEFAULT NULL,
-  `province` varchar(100) DEFAULT NULL,
-  `client` varchar(255) DEFAULT NULL,
-  `product` text,
-  `price_no_tax` decimal(16,2) DEFAULT '0.00',
-  `tax_rate` decimal(5,4) DEFAULT '0.0000',
-  `quantity` int(11) DEFAULT '1',
-  `amt_no_tax` decimal(16,2) DEFAULT '0.00',
-  `amt_with_tax` decimal(16,2) DEFAULT '0.00',
-  `order_p_name` varchar(255) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 4. 建立到账回款表
-CREATE TABLE `collections` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `order_ref` varchar(64) DEFAULT NULL,
-  `amount` decimal(16,2) DEFAULT '0.00',
-  `collection_date` date DEFAULT NULL,
-  `invoice_no` varchar(100) DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 5. 建立确认收入表
-CREATE TABLE `revenues` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `order_ref` varchar(64) DEFAULT NULL,
-  `amount` decimal(16,2) DEFAULT '0.00',
-  `revenue_date` date DEFAULT NULL,
-  PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"""
-        st.code(mysql_ddl_code, language="sql")
-        st.success("💡 操作小贴士：下载对应的 CSV 数据后，可直接在本地使用 Navicat 或 DataGrip 等可视化工具，右键对应的本地 MySQL 表结构，选择“导入向导”->“CSV 文件”即可实现秒级离线存储！导入成功后便可在 Supabase 中清空当年历史，释放云容。")
+    # 数据过滤归集
+    p_exported = [{"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]} for p in projects.values() if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year]
+    o_exported = [{"id": o["id"], "project_ref": o
