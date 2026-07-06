@@ -11,15 +11,23 @@ st.set_page_config(page_title="通信销售全生命周期 Supabase 云工作台
 PROJECT_STAGES = ["线索", "机会点", "招投标", "已中标"]
 
 # ==========================================
-# 1. 🚀 核心安全驱动：Supabase (PostgreSQL) 云数据库引擎
+# 1. 🚀 核心安全驱动：Supabase (PostgreSQL) 云数据库引擎 (强化防断线重连版)
 # ==========================================
 try:
-    # 自动读取 Streamlit Cloud 后台 Secrets 中 [secrets] 分组下的 CONNECTION_STRING
     db_uri = st.secrets["secrets"]["CONNECTION_STRING"]
-    conn = st.connection("postgresql", type="sql", url=db_uri)
+    # 💡 增加 connection_kwargs 参数：
+    # pool_pre_ping=True 会在每次手机/电脑刷新发起请求前，自动“戳一下”数据库看看是否活着，死掉则自动重连，完美解决休眠断线卡死！
+    conn = st.connection(
+        "postgresql", 
+        type="sql", 
+        url=db_uri,
+        client_encoding="utf8",
+        pool_pre_ping=True,
+        pool_recycle=1800
+    )
 except Exception as e:
     st.error(f"⚠️ 数据库连接失败！请检查 Streamlit 后台 Secrets 是否正确填入 CONNECTION_STRING。")
-    st.info("💡 提示：请确保 Secrets 中格式为: \n[secrets]\nCONNECTION_STRING = 'postgresql://postgres:密码@db.vigwcygphoagyysixihm.supabase.co:5432/postgres'")
+    st.info("💡 提示：请确认密码是否正确，且端口是否已从 5432 改为了 6543。")
     st.stop()
 
 def load_db_data():
