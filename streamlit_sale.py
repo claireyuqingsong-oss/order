@@ -467,4 +467,145 @@ elif menu == "💾 往年库容释放与数据导出":
 
     # 数据过滤归集
     p_exported = [{"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]} for p in projects.values() if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year]
-    o_exported = [{"id": o["id"], "project_ref": o
+    o_exported = [{"id": o["id"], "project_ref": o["p_ref"], "order_date": o["date"], "province": o["province"], "client": o["client"], "product": o["product"], "price_no_tax": o["price_no_tax"], "tax_rate": o["tax_rate"], "quantity": o["quantity"], "amt_no_tax": o["amt_no_tax"], "amt_with_tax": o["amt_with_tax"], "order_p_name": o["order_p_name"]} for o in orders.values() if datetime.strptime(o["date"], "%Y-%m-%d").year == export_year]
+    c_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "collection_date": row["date"], "invoice_no": row["invoice_no"]} for row in collections if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
+    r_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "revenue_date": row["date"]} for row in revenues if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
+
+    df_export_p = pd.DataFrame(p_exported)
+    df_export_o = pd.DataFrame(o_exported)
+    df_export_c = pd.DataFrame(c_exported)
+    df_export_r = pd.DataFrame(r_exported)
+
+    def make_csv_buffer(df):
+        if df.empty: return None
+        buffer = io.StringIO()
+        df.to_csv(buffer, index=False, encoding='utf-8-sig')
+        return buffer.getvalue()
+
+    # 展示并提供下载 CSV 功能
+    dl_col1, dl_col2, dl_col3, dl_col4 = st.columns(4)
+
+    with dl_col1:
+        st.metric("1. 框架项目数", len(p_exported))
+        csv_p = make_csv_buffer(df_export_p)
+        if csv_p: st.download_button(f"📥 下载 projects_{export_year}.csv", csv_p, f"mysql_projects_{export_year}.csv", "text/csv")
+        
+    with dl_col2:
+        st.metric("2. 正式订单数", len(o_exported))
+        csv_o = make_csv_buffer(df_export_o)
+        if csv_o: st.download_button(f"📥 下载 orders_{export_year}.csv", csv_o, f"mysql_orders_{export_year}.csv", "text/csv")
+
+    with dl_col3:
+        st.metric("3. 回款到账流水", len(c_exported))
+        csv_c = make_csv_buffer(df_export_c)
+        if csv_c: st.download_button(f"📥 下载 collections_{export_year}.csv", csv_c, f"mysql_collections_{export_year}.csv", "text/csv")
+
+    with dl_col4:
+        st.metric("4. 网签确收流水", len(r_exported))
+        csv_r = make_csv_buffer(df_export_r)
+        if csv_r: st.download_button(f"📥 下载 revenues_{export_year}.csv", csv_r, f"mysql_revenues_{export_year}.csv", "text/csv")
+
+    st.markdown("---")
+    
+    # 🚨 核心升级：按年区分删除，禁止删除当年及未来数据
+    st.subheader("🚨 线上云容清空释放执行中心")
+    
+    # 判断当前选择的年份是否允许执行清空操作
+    if export_year >= system_current_year:
+        st.error(f"🔒 **物理删除硬熔断锁死**：您当前选择的年份是 `{export_year}` 年（属于当前正在经营或未来的年度）。根据安全审计规则，删除操作**仅限于往年历史陈旧数据**。当前 {system_current_year} 年的数据已被系统自动锁定、无法清空！")
+    else:
+        st.warning(f"⚠️ 允许执行：您当前选择的是往年历史数据（{export_year} 年）。清空后不可逆！")
+        
+        # 强制下载双确认勾选框
+        confirm_downloaded = st.checkbox(f"🔴 **我发誓确认：我刚才已经点击上方按钮下载了 {export_year} 历史年的全部明细 CSV 文件，且已经在本地 MySQL 中成功归档，现在请求立刻清空该年度云端内存，释放云容量！**")
+        
+        if confirm_downloaded:
+            st.info("🔓 安全断路器已解开。请仔细核对需要物理抹除的数据条数：")
+            del_btn_col1, del_btn_col2, del_btn_col3, del_btn_col4 = st.columns(4)
+            
+            with del_btn_col1:
+                if not df_export_p.empty:
+                    if st.button(f"🗑️ 物理粉碎云端 {export_year} 项目数据", type="primary"):
+                        res = requests.delete(f"{SB_URL}/rest/v1/projects?bid_date=gte.{export_year}-01-01&bid_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
+                else: st.text("❌ 无可删数据")
+                
+            with del_btn_col2:
+                if not df_export_o.empty:
+                    if st.button(f"🗑️ 物理粉碎云端 {export_year} 订单数据", type="primary"):
+                        res = requests.delete(f"{SB_URL}/rest/v1/orders?order_date=gte.{export_year}-01-01&order_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
+                else: st.text("❌ 无可删数据")
+                
+            with del_btn_col3:
+                if not df_export_c.empty:
+                    if st.button(f"🗑️ 物理粉碎云端 {export_year} 回款数据", type="primary"):
+                        res = requests.delete(f"{SB_URL}/rest/v1/collections?collection_date=gte.{export_year}-01-01&collection_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
+                else: st.text("❌ 无可删数据")
+                
+            with del_btn_col4:
+                if not df_export_r.empty:
+                    if st.button(f"🗑️ 物理粉碎云端 {export_year} 确收数据", type="primary"):
+                        res = requests.delete(f"{SB_URL}/rest/v1/revenues?revenue_date=gte.{export_year}-01-01&revenue_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                        if res.status_code in [200, 204]: st.success("数据清空成功！"); st.cache_data.clear(); st.rerun()
+                else: st.text("❌ 无可删数据")
+        else:
+            st.code("🔒 线上擦除器处于保护状态。请先勾选上方的“我发誓确认...”安全声明，以解除保护。")
+
+    st.markdown("---")
+    
+    # 本地 MySQL 一键建表 DDL 工具区
+    with st.expander("🛠️ 附录：本地 MySQL 一键建表标准 SQL 语句（DDL）"):
+        st.markdown("如果您在本地物理电脑搭建了 MySQL 数据库，在第一次导入上述生成的 CSV 前，请先在本地执行以下标准的建表命令：")
+        mysql_ddl_code = """-- 1. 创建本地销售数据库
+CREATE DATABASE IF NOT EXISTS sale_archive_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
+USE sale_archive_db;
+
+-- 2. 建立框架项目表
+CREATE TABLE `projects` (
+  `id` varchar(64) NOT NULL,
+  `name` varchar(255) DEFAULT NULL,
+  `client` varchar(255) DEFAULT NULL,
+  `target` decimal(16,2) DEFAULT '0.00',
+  `stage` varchar(100) DEFAULT NULL,
+  `bid_date` date DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 3. 建立中标订单表
+CREATE TABLE `orders` (
+  `id` varchar(64) NOT NULL,
+  `project_ref` varchar(64) DEFAULT NULL,
+  `order_date` date DEFAULT NULL,
+  `province` varchar(100) DEFAULT NULL,
+  `client` varchar(255) DEFAULT NULL,
+  `product` text,
+  `price_no_tax` decimal(16,2) DEFAULT '0.00',
+  `tax_rate` decimal(5,4) DEFAULT '0.0000',
+  `quantity` int(11) DEFAULT '1',
+  `amt_no_tax` decimal(16,2) DEFAULT '0.00',
+  `amt_with_tax` decimal(16,2) DEFAULT '0.00',
+  `order_p_name` varchar(255) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 4. 建立到账回款表
+CREATE TABLE `collections` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `order_ref` varchar(64) DEFAULT NULL,
+  `amount` decimal(16,2) DEFAULT '0.00',
+  `collection_date` date DEFAULT NULL,
+  `invoice_no` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 5. 建立确认收入表
+CREATE TABLE `revenues` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `order_ref` varchar(64) DEFAULT NULL,
+  `amount` decimal(16,2) DEFAULT '0.00',
+  `revenue_date` date DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"""
+        st.code(mysql_ddl_code, language="sql")
