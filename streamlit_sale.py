@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -231,7 +230,7 @@ elif menu == "📝 综合业务台账":
         st.info("选定的日期范围内暂无符合过滤条件的正式订单数据")
 
 # ==========================================
-# 5. 页面 3: 业务数据维护中心 (集成多单号智能分摊核销引擎)
+# 5. 页面 3: 业务数据维护中心
 # ==========================================
 elif menu == "➕ 业务数据维护中心":
     st.title("🛠️ 业务数据全生命周期维护中心")
@@ -301,76 +300,80 @@ elif menu == "➕ 业务数据维护中心":
                             res = requests.post(f"{SB_URL}/rest/v1/revenues", headers=HEADERS, json=r_payload, timeout=5)
                             if res.status_code in [200, 201]: st.success("🎉 确收成功！"); st.cache_data.clear(); st.rerun()
 
-        # 🏦 回款销账（已全面升级合并订单拆分算法）
+        # 🏦 回款销账（已全面升级解耦：多单合并下拉多选，遗留老账独立手敲）
         elif sub_step == "🏦 回款销账登记":
-            is_manual_order = st.checkbox("⏳ 登记多年前的历史老订单回款（或非下拉框的自定义单号拼接）")
-            st.info("💡 技巧：如果运营商一笔钱结算了多个订单，请勾选上方开关，在单号框中用【英文逗号】隔开多个单号录入（如：`单号A,单号B`），系统会自动按欠款比例拆分流水核销！")
+            st.markdown("### 🏦 客户回款到账流销账登记")
+            
+            # 1. 拆分逻辑：遗留老账作为单独开关
+            is_legacy_history = st.checkbox("⏳ 本次是核销【多年前的陈年遗留老账/挂账】（系统内无此订单号）")
             
             with st.form("c_form", clear_on_submit=True):
-                if not is_manual_order:
-                    if not orders: st.warning("⚠️ 系统内暂无订单。"); st.form_submit_button("不可提交", disabled=True)
+                if not is_legacy_history:
+                    # 💡 核心改进：系统内账单，默认直接提供多选下拉框！支持单选，也支持自由组合鼠标勾选！
+                    if not orders: 
+                        st.warning("⚠️ 系统内暂无订单。")
+                        st.form_submit_button("不可提交", disabled=True)
+                        raw_oid_input = ""
                     else:
-                        o_opts = {f"订单:{oid} (当前待收尾款:¥{o['amt_with_tax'] - o['collect_total']})": oid for oid, o in orders.items()}
-                        sel_o = st.selectbox("1. 选择要核销的客户订单号 *", list(o_opts.keys())); oid_final = o_opts[sel_o]
+                        o_opts = {f"订单:{oid} (尾款:¥{o['amt_with_tax'] - o['collect_total']:.2f})": oid for oid, o in orders.items()}
+                        selected_order_labels = st.multiselect("1. 请选择本次合并结算包含的订单号（可多选框）*", list(o_opts.keys()))
+                        # 自动将多选结果提取出单号，并用英文逗号拼装成底层引擎认识的格式
+                        raw_oid_input = ",".join([o_opts[lbl] for lbl in selected_order_labels])
                 else: 
-                    oid_final = st.text_input("1. 手动精确输入订单号 * (支持多单号逗号隔开，如: ORDER1,ORDER2)")
+                    # 如果是历史老账，才切换为全手动输入框
+                    raw_oid_input = st.text_input("1. 手动精确输入历史客户订单号 * (支持多单号逗号隔开，如: OLD_01,OLD_02)")
 
                 c_amt = st.number_input("2. 本次财务实际到账总回款额 (元) *", min_value=0.0)
                 c_date = st.date_input("3. 实际回款进账日期 *", value=datetime.now()).strftime("%Y-%m-%d")
                 c_invoice = st.text_input("4. 关联销账发票号 / 财务凭证号 (选填)")
 
                 if st.form_submit_button("💾 确认登记回款"):
-                    raw_oid_input = str(oid_final).strip()
-                    if not raw_oid_input: st.error("❌ 订单号不能为空！")
+                    cleaned_input = str(raw_oid_input).strip()
+                    if not cleaned_input: st.error("❌ 必须选择或填写至少一个订单号才能提交结算！")
                     elif c_amt <= 0: st.error("❌ 回款金额需大于0元！")
                     else:
-                        # 💡 核心平摊引擎：以英文逗号分割多订单号进行解析
-                        target_orders = [x.strip() for x in raw_oid_input.split(",") if x.strip()]
+                        # 💡 核心分摊引擎解析处理
+                        target_orders = [x.strip() for x in cleaned_input.split(",") if x.strip()]
                         
-                        if len(target_orders) <= 1:
-                            # --- 场景 A：普通的单订单核销逻辑（保持原样） ---
+                        if len(target_orders) == 1:
+                            # --- 场景 A：单订单极速核销 ---
                             single_oid = target_orders[0]
-                            if is_manual_order and (single_oid not in orders):
+                            if is_legacy_history and (single_oid not in orders):
                                 hedge_payload = {"id": single_oid, "project_ref": None, "order_date": c_date, "province": "历史老账归档区", "client": "历史长账龄客户", "product": "跨年历史账目结转款", "price_no_tax": c_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": c_amt, "amt_with_tax": c_amt, "order_p_name": "多年前老订单挂账"}
                                 requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=hedge_payload, timeout=5)
                             
                             c_payload = {"order_ref": single_oid, "amount": c_amt, "collection_date": c_date, "invoice_no": c_invoice if c_invoice else "-"}
                             requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
                         else:
-                            # --- 场景 B：运营商复合合并账单【智能按欠款比例分摊】 ---
-                            # 1. 抓出这几个单子各自在系统内的剩余欠款
+                            # --- 场景 B：运营商合并账单【智能按欠款比例拆分】 ---
                             debt_dict = {}
                             total_debt = 0.0
                             for target_id in target_orders:
                                 if target_id in orders:
                                     current_debt = max(0.0, orders[target_id]["amt_with_tax"] - orders[target_id]["collect_total"])
                                 else:
-                                    current_debt = 0.0 # 不在系统里的默认为0
+                                    current_debt = 0.0
                                 debt_dict[target_id] = current_debt
                                 total_debt += current_debt
                             
-                            # 2. 执行智能比例剪裁或均摊算法
                             remaining_pool = c_amt
                             for idx, target_id in enumerate(target_orders):
                                 if idx == len(target_orders) - 1:
-                                    # 最后一个订单拿走余额，防止浮点数精度丢失
                                     split_amt = remaining_pool
                                 else:
                                     if total_debt > 0:
                                         split_amt = round(c_amt * (debt_dict[target_id] / total_debt), 2)
                                     else:
-                                        split_amt = round(c_amt / len(target_orders), 2) # 若都无欠款则平均平摊
+                                        split_amt = round(c_amt / len(target_orders), 2)
                                     remaining_pool -= split_amt
                                 
-                                # 3. 如果单子属于不在系统内的陈年老账，静默建立平衡订单
                                 if target_id not in orders:
-                                    requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json={"id": target_id, "project_ref": None, "order_date": c_date, "province": "合并结算归档区", "client": "运营商批量结算", "product": "历史批量并单核销款", "price_no_tax": split_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": split_amt, "amt_with_tax": split_amt, "order_p_name": "批量历史合并挂账"}, timeout=5)
+                                    requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json={"id": target_id, "project_ref": None, "order_date": c_date, "province": "合并结算老账区", "client": "运营商历史长账", "product": "历史批量并单核销款", "price_no_tax": split_amt, "tax_rate": 0.0, "quantity": 1, "amt_no_tax": split_amt, "amt_with_tax": split_amt, "order_p_name": "批量遗留老账合并"}, timeout=5)
                                 
-                                # 4. 精准打入切分后的单独回款记录至 Supabase 
-                                each_payload = {"order_ref": target_id, "amount": split_amt, "collection_date": c_date, "invoice_no": f"{c_invoice}(合并结算拆分)" if c_invoice else "合并拆分流水"}
+                                each_payload = {"order_ref": target_id, "amount": split_amt, "collection_date": c_date, "invoice_no": f"{c_invoice}(多单合并自动拆分)" if c_invoice else "合并拆分流水"}
                                 requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=each_payload, timeout=5)
                         
-                        st.success("🎉 运营商多单合并账目已成功通过引擎智能拆分并平摊核销入库！")
+                        st.success("🎉 回款处理完毕！已成功通过下拉多选匹配订单，后台自动平摊拆分流水并对冲账目！")
                         st.cache_data.clear(); st.rerun()
 
     # 修改功能
