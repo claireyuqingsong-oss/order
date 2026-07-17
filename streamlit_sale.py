@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -7,194 +6,195 @@ import requests
 import io
 
 # ==========================================
-# 🎨 1. 全量视觉重构：YouTube/X 极高对比度、物理隔离 CSS
+# 🎨 1. 全量视觉重构：Google Material Design 极简高对比度主题 CSS
 # ==========================================
 st.set_page_config(page_title="通信销售与复式财务全能云工作台", layout="wide", page_icon="📈")
 
-# 核心现代配色方案
-X_PRIMARY = "#1D9BF0"      # X 科技蓝
-X_BG_MAIN = "#F8FAFC"      # 极简浅灰白背景（右侧）
-X_BG_SIDEBAR = "#0F1419"   # 极夜黑侧边栏（左侧）
-X_TXT_DARK = "#0F1419"     # 主界面深空黑字
-X_TXT_LIGHT = "#FFFFFF"    # 侧边栏纯白字
-X_TXT_MUTED = "#536471"    # 现代哑光灰
+# Google 官方 Material 颜色规范
+G_PRIMARY = "#1A73E8"       # Google 科技蓝
+G_BG_MAIN = "#FFFFFF"       # 纯白主背景
+G_BG_SIDEBAR = "#F8F9FA"    # 浅灰侧边栏背景
+G_TEXT_MAIN = "#202124"     # Google 标准墨黑字（极高对比度）
+G_TEXT_MUTED = "#5F6368"    # Google 哑光中灰
+G_BORDER = "#DADCE0"        # Google 边框灰
+G_CARD_BG = "#FFFFFF"       # 卡片纯白
 
 st.markdown(f"""
 <style>
-    /* 1. 全局背景及字体定义 */
+    /* 1. 全局基础重构 */
     .stApp {{
-        background-color: {X_BG_MAIN} !important;
-        color: {X_TXT_DARK} !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background-color: {G_BG_MAIN} !important;
+        color: {G_TEXT_MAIN} !important;
+        font-family: "Roboto", "Segoe UI", Arial, sans-serif !important;
     }}
 
-    /* === 2. 左侧暗黑科技侧边栏 (Sidebar) 严格作用域 === */
+    /* === 2. 左侧 Google Sidebar (浅灰极简) 重构 === */
     [data-testid="stSidebar"] {{
-        background-color: {X_BG_SIDEBAR} !important;
-        border-right: 1px solid #2F3336 !important;
-        color: {X_TXT_LIGHT} !important;
+        background-color: {G_BG_SIDEBAR} !important;
+        border-right: 1px solid {G_BORDER} !important;
     }}
     
-    /* 仅在侧边栏生效的文字颜色强制白色，防止污染右侧主界面 */
+    /* 确保侧边栏的所有文字清晰可见（墨黑色） */
     [data-testid="stSidebar"] .stText, 
     [data-testid="stSidebar"] label, 
     [data-testid="stSidebar"] .stMarkdown p,
     [data-testid="stSidebar"] span {{
-        color: {X_TXT_LIGHT} !important;
-        font-weight: 600 !important;
+        color: {G_TEXT_MAIN} !important;
+        font-weight: 500 !important;
     }}
     
     [data-testid="stSidebar"] h1, 
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3 {{
-        color: {X_TXT_LIGHT} !important;
-        font-weight: 800 !important;
+        color: {G_PRIMARY} !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em !important;
     }}
 
     /* 侧边栏折叠面板美化 */
     [data-testid="stSidebar"] .stExpander {{
-        background-color: #1E2732 !important;
-        border: 1px solid #38444D !important;
-        border-radius: 12px !important;
+        background-color: #FFFFFF !important;
+        border: 1px solid {G_BORDER} !important;
+        border-radius: 8px !important;
+        box-shadow: none !important;
     }}
 
-    /* 侧边栏导航单选框美化 (X 极简胶囊按钮) */
+    /* 侧边栏导航单选框：致敬 Google Cloud 控制台侧边栏 */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {{
-        gap: 12px !important;
-        padding-top: 15px !important;
+        gap: 6px !important;
+        padding-top: 10px !important;
     }}
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
         background-color: transparent !important;
-        border-radius: 9999px !important;
-        padding: 12px 20px !important;
+        border-radius: 0 24px 24px 0 !important; /* 右侧圆角胶囊 */
+        padding: 10px 16px !important;
         margin: 0 !important;
-        transition: all 0.2s ease-in-out;
+        transition: all 0.15s ease-in-out;
         width: 100%;
         display: flex;
         align-items: center;
         cursor: pointer;
+        border: none !important;
     }}
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
-        background-color: rgba(255, 255, 255, 0.08) !important;
+        background-color: #F1F3F4 !important;
     }}
-    /* 被选中时的蓝色高亮框 */
+    /* 被选中时的 Google 浅蓝激活状态 */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] {{
-        background-color: rgba(29, 155, 240, 0.15) !important;
-        border: 1px solid {X_PRIMARY} !important;
+        background-color: #E8F0FE !important;
     }}
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] p {{
-        color: {X_PRIMARY} !important;
-        font-weight: 800 !important;
+        color: {G_PRIMARY} !important;
+        font-weight: 700 !important;
     }}
 
-    /* === 3. 右侧主界面 (Main Content) 严格隔离保护 === */
-    /* 强制右侧主页面内所有表单标签、普通文本为高对比度深色，彻底解决看不清的问题 */
+    /* === 3. 右侧主界面 (Main Content) 物理隔离保护 === */
+    /* 强制右侧主页面内所有表单标签、普通文本为高对比度墨黑色，彻底杜绝看不清 */
     .main .block-container label,
     .main .block-container .stText,
     .main .block-container .stMarkdown p,
     .main .block-container span,
     .main .block-container div[data-testid="stWidgetLabel"] p {{
-        color: {X_TXT_DARK} !important;
-        font-weight: 600 !important;
+        color: {G_TEXT_MAIN} !important;
+        font-weight: 500 !important;
     }}
 
-    /* 大气、清晰的主标题和副标题 */
+    /* 大气、清晰的标题体系 */
     .main .block-container h1 {{
-        color: {X_TXT_DARK} !important;
-        font-weight: 800 !important;
-        letter-spacing: -0.04em !important;
+        color: {G_TEXT_MAIN} !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.03em !important;
         margin-bottom: 1.5rem !important;
+        border-bottom: 1px solid {G_BORDER};
+        padding-bottom: 12px;
     }}
     .main .block-container h2, 
     .main .block-container h3, 
     .main .block-container h4 {{
-        color: {X_TXT_DARK} !important;
-        font-weight: 700 !important;
+        color: {G_TEXT_MAIN} !important;
+        font-weight: 600 !important;
         margin-top: 1.5rem !important;
     }}
 
-    /* 主界面单选框（维护操作类型、业务阶段）的高对比度黑色文字修复 */
+    /* 主界面单选框（Radio）的高对比度黑色文字修复 */
     .main .block-container .stRadio div[role="radiogroup"] label p {{
-        color: {X_TXT_DARK} !important;
-        font-weight: 600 !important;
+        color: {G_TEXT_MAIN} !important;
+        font-weight: 500 !important;
     }}
 
-    /* YouTube 风格的独立悬浮白色卡片容器 */
-    .dashboard-card {{
-        background-color: #FFFFFF !important;
+    /* Google 扁平悬浮白色卡片容器 */
+    .google-card {{
+        background-color: {G_CARD_BG} !important;
         padding: 24px !important;
-        border-radius: 16px !important;
-        border: 1px solid #E1E8ED !important;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+        border-radius: 8px !important;
+        border: 1px solid {G_BORDER} !important;
         margin-bottom: 16px !important;
-        transition: transform 0.2s ease;
-    }}
-    .dashboard-card:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06) !important;
     }}
 
-    /* 主页面表单输入框、选择框现代扁平化设计 */
+    /* 表单输入框、选择框 Google 经典扁平化设计 */
     .main .block-container .stTextInput>div>div>input, 
     .main .block-container .stNumberInput>div>div>input, 
     .main .block-container .stSelectbox>div>div>div, 
     .main .block-container .stDateInput>div>div>input {{
         background-color: #FFFFFF !important;
-        color: {X_TXT_DARK} !important;
-        border: 1.5px solid #CFD9DE !important;
-        border-radius: 10px !important;
-        font-weight: 500 !important;
-        padding: 10px 14px !important;
+        color: {G_TEXT_MAIN} !important;
+        border: 1px solid {G_BORDER} !important;
+        border-radius: 4px !important;
+        font-weight: 400 !important;
+        padding: 8px 12px !important;
     }}
+    /* 输入框聚焦时的 Google 蓝高亮边框 */
     .main .block-container .stTextInput>div>div>input:focus, 
     .main .block-container .stNumberInput>div>div>input:focus {{
-        border-color: {X_PRIMARY} !important;
-        box-shadow: 0 0 0 3px rgba(29, 155, 240, 0.15) !important;
+        border-color: {G_PRIMARY} !important;
+        box-shadow: 0 0 0 1px {G_PRIMARY} !important;
     }}
 
-    /* X 风格胶囊型大按钮 */
+    /* Google 经典标准矩形圆角按钮 */
     .stButton>button {{
-        background-color: {X_PRIMARY} !important;
+        background-color: {G_PRIMARY} !important;
         color: #FFFFFF !important;
         border: none !important;
-        border-radius: 9999px !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        padding: 12px 32px !important;
-        transition: background-color 0.2s;
+        border-radius: 4px !important;
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        padding: 10px 24px !important;
+        transition: background-color 0.15s, box-shadow 0.15s;
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
     }}
     .stButton>button:hover {{
-        background-color: #1A8CD8 !important;
+        background-color: #1557B0 !important;
+        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15) !important;
     }}
 
     /* 选项卡 Tabs 美化 */
     button[data-baseweb="tab"] {{
-        color: {X_TXT_MUTED} !important;
-        font-size: 16px !important;
-        font-weight: 600 !important;
+        color: {G_TEXT_MUTED} !important;
+        font-size: 15px !important;
+        font-weight: 500 !important;
         border-bottom-width: 3px !important;
     }}
     button[data-baseweb="tab"][aria-selected="true"] {{
-        color: {X_PRIMARY} !important;
-        border-bottom-color: {X_PRIMARY} !important;
-        font-weight: 700 !important;
+        color: {G_PRIMARY} !important;
+        border-bottom-color: {G_PRIMARY} !important;
+        font-weight: 600 !important;
     }}
 
     /* 进度条轨道与滑块 */
     .stProgress > div > div {{
-        background-color: #E1E8ED !important;
-        height: 10px !important;
-        border-radius: 999px !important;
+        background-color: #E8EAED !important;
+        height: 8px !important;
+        border-radius: 4px !important;
     }}
     .stProgress > div > div > div > div {{
-        background-color: {X_PRIMARY} !important;
-        border-radius: 999px !important;
+        background-color: {G_PRIMARY} !important;
+        border-radius: 4px !important;
     }}
 
     /* 数据表格美化 */
     [data-testid="stDataTable"] {{
-        border: 1px solid #E1E8ED !important;
-        border-radius: 12px !important;
+        border: 1px solid {G_BORDER} !important;
+        border-radius: 8px !important;
         overflow: hidden !important;
     }}
 </style>
@@ -336,14 +336,14 @@ menu_options = [
 ]
 
 with st.sidebar:
-    st.markdown("<h2 style='text-align: center; color: #FFFFFF; padding-bottom: 10px;'>📊 业务导航</h2>", unsafe_allow_html=True)
-    menu = st.radio("系统功能导航", menu_options, key="nav_menu", label_visibility="collapsed")
+    st.markdown("<h3 style='text-align: left; margin-left: 16px; margin-bottom: 20px; color: #1A73E8;'>📈 业务云控制台</h3>", unsafe_allow_html=True)
+    menu = st.sidebar.radio("导航菜单", menu_options, key="nav_menu", label_visibility="collapsed")
 
 # ==========================================
 # 4. 页面 1: 集团核心业绩与双轨 KPI 战略大屏
 # ==========================================
 if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
-    st.title("📈 集团核心业绩与双轨 KPI 战略大屏")
+    st.title("集团核心业绩与双轨 KPI 战略大屏")
     
     current_year = system_current_year 
     
@@ -355,21 +355,21 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
 
     st.markdown(f"### 🎯 {current_year} 年度双轨 KPI 实时观测中枢")
     
-    # --- KPI 卡片渲染器 (带有顶部炫彩边条的卡片) ---
-    def render_kpi_card(title, value, sub_text="", accent_color="#E1E8ED", value_color="#0F1419"):
+    # --- KPI 卡片渲染器 (Google 极简无阴影高质感边框卡片) ---
+    def render_kpi_card(title, value, sub_text="", accent_color="#1A73E8"):
         return f"""
-        <div class="dashboard-card" style="border-top: 6px solid {accent_color};">
-            <p style="margin:0; font-size:14px; color:{X_TXT_MUTED}; font-weight:600; text-transform: uppercase;">{title}</p>
-            <h1 style="margin:12px 0; font-size:32px; color:{value_color}; font-weight:800; font-family: sans-serif; letter-spacing:-0.03em;">{value}</h1>
-            <p style="margin:0; font-size:13px; color:{accent_color}; font-weight:700;">{sub_text}</p>
+        <div class="google-card" style="border-left: 5px solid {accent_color} !important;">
+            <p style="margin:0; font-size:13px; color:{G_TEXT_MUTED}; font-weight:600; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
+            <h1 style="margin:10px 0; font-size:30px; color:{G_TEXT_MAIN}; font-weight:700; border:none !important; padding:0 !important; letter-spacing:-0.02em;">{value}</h1>
+            <p style="margin:0; font-size:12px; color:{accent_color}; font-weight:600;">{sub_text}</p>
         </div>
         """
         
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-    m_col1.markdown(render_kpi_card(f"{current_year}年度确收指标", f"¥{cfg_rev:,.2f}", "年度确收考核线", "#CFD9DE"), unsafe_allow_html=True)
-    m_col2.markdown(render_kpi_card("大盘当前已确收", f"¥{annual_revenue_done:,.2f}", f"🎯 达成率 {rev_annual_rate*100:.1f}%", X_PRIMARY, "#0F1419"), unsafe_allow_html=True)
-    m_col3.markdown(render_kpi_card(f"{current_year}年度回款目标", f"¥{cfg_col:,.2f}", "年度到账红线", "#CFD9DE"), unsafe_allow_html=True)
-    m_col4.markdown(render_kpi_card("大盘累计资金进账", f"¥{annual_collection_done:,.2f}", f"⚡ 达成率 {col_annual_rate*100:.1f}%", "#7856FF", "#0F1419"), unsafe_allow_html=True)
+    m_col1.markdown(render_kpi_card(f"{current_year}年度确收指标", f"¥{cfg_rev:,.2f}", "年度财务确收底线", "#5F6368"), unsafe_allow_html=True)
+    m_col2.markdown(render_kpi_card("大盘当前已确收", f"¥{annual_revenue_done:,.2f}", f"🎯 达成率 {rev_annual_rate*100:.1f}%", G_PRIMARY), unsafe_allow_html=True)
+    m_col3.markdown(render_kpi_card(f"{current_year}年度回款目标", f"¥{cfg_col:,.2f}", "年度实际资金到账红线", "#5F6368"), unsafe_allow_html=True)
+    m_col4.markdown(render_kpi_card("大盘累计资金进账", f"¥{annual_collection_done:,.2f}", f"⚡ 达成率 {col_annual_rate*100:.1f}%", "#12B5CB"), unsafe_allow_html=True)
     
     # 推进进度条
     st.markdown("<br>", unsafe_allow_html=True)
@@ -382,7 +382,7 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
     
     # 历史演进模块
     st.markdown('<h3>🗂️ 跨断代全景历史业绩演进脉络</h3>', unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="google-card">', unsafe_allow_html=True)
     
     history_list = []
     for yr, data in HISTORY_ARCHIVE.items():
@@ -398,15 +398,15 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
             df_history_chart, x="年份", y=["确认收入", "到账回款"], 
             barmode="group", text_auto='.3s', title="多跨度年度营收/进账全景历史推演",
             template="plotly_white",
-            color_discrete_sequence=[X_PRIMARY, "#AAB8C2"]
+            color_discrete_sequence=[G_PRIMARY, "#9AA0A6"]
         )
         fig_history.update_layout(
             plot_bgcolor='rgba(0,0,0,0)', 
             paper_bgcolor='rgba(0,0,0,0)', 
-            font_color=X_TXT_MUTED, 
-            title_font_color=X_TXT_DARK,
+            font_color=G_TEXT_MUTED, 
+            title_font_color=G_TEXT_MAIN,
             xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor="#E1E8ED")
+            yaxis=dict(showgrid=True, gridcolor="#E8EAED")
         )
         st.plotly_chart(fig_history, use_container_width=True)
     except: st.info("📊 演进图深度加载中...")
@@ -416,9 +416,9 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
 # 5. 页面 2: 通信业务拉通一体化智能流水台账
 # ==========================================
 elif menu == "📝 通信业务拉通一体化智能流水台账":
-    st.title("🖥️ 通信业务拉通一体化智能流水台账")
+    st.title("通信业务拉通一体化智能流水台账")
     
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="google-card">', unsafe_allow_html=True)
     f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
     unique_projects = ["全部项目"] + sorted(list(set(p["name"] for p in projects.values())))
     unique_provinces = ["全部省份"] + sorted(list(set(o["province"] for o in orders.values())))
@@ -439,7 +439,7 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
         project_rows.append({"项目框架名称": p["name"], "客户简称": p["client"], "框架标的总额": p["target"], "已下订单含税总额": p["amt_with_tax_total"], "额度消耗比例": f"{ratio*100:.1f}%", "安全预警": warning_status, "创建日期": p["bid_date"], "当前状态": p["stage"]})
     if project_rows:
         df_p_view = pd.DataFrame(project_rows)
-        st.dataframe(df_p_view.style.map(lambda v: "background-color: #FEE2E2; color: #991B1B; font-weight: 700;" if "🚨" in str(v) else ("background-color: #FEF3C7; color: #92400E; font-weight: 700;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
+        st.dataframe(df_p_view.style.map(lambda v: "background-color: #FCE8E6; color: #C5221F; font-weight: bold;" if "🚨" in str(v) else ("background-color: #FEF7E0; color: #B06000; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("🤝 中标订单及【确收/回款】生命周期流水")
@@ -466,7 +466,9 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
 # 6. 页面 3: 核心业务数据全生命周期控制中心
 # ==========================================
 elif menu == "➕ 核心业务数据全生命周期控制中心":
-    st.title("🔧 核心业务数据全生命周期控制中心")
+    st.title("核心业务数据全生命周期控制中心")
+    
+    # 严格锁死主页面 label 文字的高对比度
     op_type = st.radio("请选择维护操作类型：", ["🆕 录入全新数据", "⚙️ 修改已有信息"], horizontal=True)
     st.markdown("---")
 
@@ -474,7 +476,7 @@ elif menu == "➕ 核心业务数据全生命周期控制中心":
         sub_step = st.radio("请选择录入的业务阶段：", ["🎯 项目前期录入", "🤝 中标订单录入", "📈 确收登记", "🏦 回款销账"], horizontal=True) 
         st.markdown("---")
         
-        st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+        st.markdown('<div class="google-card">', unsafe_allow_html=True)
         if sub_step == "🎯 项目前期录入":
             with st.form("p_form", clear_on_submit=True):
                 st.markdown("##### 填写项目前期框架协议")
@@ -623,9 +625,9 @@ elif menu == "➕ 核心业务数据全生命周期控制中心":
 # 7. 🏦 现代复式财务云账本 (hledger 架构)
 # ==========================================
 elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
-    st.title("🏛️ 现代复式财务云账本 (hledger 架构)")
+    st.title("现代复式财务云账本 (hledger 架构)")
     
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="google-card">', unsafe_allow_html=True)
     f_tabs = st.tabs(["📊 资产分布雷达分析", "📖 Journal 账务明细流水长卷", "✍️ 复合记账表单 (多级平衡校验)"])
     
     with f_tabs[0]:
@@ -641,7 +643,7 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
                         hole=0.5, template="plotly_white", title="Exp. 支出类科目占比分析",
                         color_discrete_sequence=px.colors.qualitative.Pastel
                     )
-                    fig_pie_l.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color=X_TXT_MUTED)
+                    fig_pie_l.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color=G_TEXT_MUTED)
                     st.plotly_chart(fig_pie_l, use_container_width=True)
             with sc2:
                 all_tag_stats = {}
@@ -655,9 +657,9 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
                     fig_tag_bar = px.bar(
                         df_tags, x="自定义标签Tag", y="涉及总金额", text_auto='.2s', 
                         template="plotly_white", title="动态自由标签穿透分析",
-                        color_discrete_sequence=[X_PRIMARY]
+                        color_discrete_sequence=[G_PRIMARY]
                     )
-                    fig_tag_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color=X_TXT_MUTED, xaxis=dict(showgrid=False))
+                    fig_tag_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color=G_TEXT_MUTED, xaxis=dict(showgrid=False))
                     st.plotly_chart(fig_tag_bar, use_container_width=True)
 
     with f_tabs[1]:
@@ -725,9 +727,9 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
 # 8. 页面 5: 库容安全熔断释放与本地备份中枢
 # ==========================================
 elif menu == "💾 库容安全熔断释放与本地备份中枢":
-    st.title("💾 库容安全熔断释放与本地备份中枢")
+    st.title("库容安全熔断释放与本地备份中枢")
     
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="google-card">', unsafe_allow_html=True)
     st.subheader("📊 财务专项：云端复式财务流水一键导出备份")
     if ledgers:
         df_all_ledgers = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
@@ -736,7 +738,7 @@ elif menu == "💾 库容安全熔断释放与本地备份中枢":
     st.markdown('</div>', unsafe_allow_html=True)
         
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="dashboard-card">', unsafe_allow_html=True)
+    st.markdown('<div class="google-card">', unsafe_allow_html=True)
     st.subheader("📅 历史陈年销售数据归档与熔断粉碎")
     export_year = st.selectbox("请选择要归档归集的目标业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
 
