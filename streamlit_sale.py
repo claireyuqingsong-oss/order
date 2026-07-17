@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,67 +7,30 @@ import requests
 import io
 
 # ==========================================
-# 🎨 1. 全量视觉重构：Google Material Design 极简高对比度主题 CSS
+# 🎨 1. 全自适应、高对比度 Google Material 风格主题 CSS
 # ==========================================
 st.set_page_config(page_title="通信销售与复式财务全能云工作台", layout="wide", page_icon="📈")
 
-# Google 官方 Material 颜色规范
-G_PRIMARY = "#1A73E8"       # Google 科技蓝
-G_BG_MAIN = "#FFFFFF"       # 纯白主背景
-G_BG_SIDEBAR = "#F8F9FA"    # 浅灰侧边栏背景
-G_TEXT_MAIN = "#202124"     # Google 标准墨黑字（极高对比度）
-G_TEXT_MUTED = "#5F6368"    # Google 哑光中灰
-G_BORDER = "#DADCE0"        # Google 边框灰
-G_CARD_BG = "#FFFFFF"       # 卡片纯白
-
-st.markdown(f"""
+# 采用自适应 CSS 变量，确保 Light/Dark 模式下均 100% 完美渲染
+st.markdown("""
 <style>
-    /* 1. 全局基础重构 */
-    .stApp {{
-        background-color: {G_BG_MAIN} !important;
-        color: {G_TEXT_MAIN} !important;
+    /* 1. 适配官方容器颜色，防止文字被硬编码背景色遮挡 */
+    .stApp {
         font-family: "Roboto", "Segoe UI", Arial, sans-serif !important;
-    }}
+    }
 
-    /* === 2. 左侧 Google Sidebar (浅灰极简) 重构 === */
-    [data-testid="stSidebar"] {{
-        background-color: {G_BG_SIDEBAR} !important;
-        border-right: 1px solid {G_BORDER} !important;
-    }}
+    /* === 2. 左侧自适应侧边栏 (Sidebar) 强化 === */
+    [data-testid="stSidebar"] {
+        border-right: 1px solid var(--border-color) !important;
+    }
     
-    /* 确保侧边栏的所有文字清晰可见（墨黑色） */
-    [data-testid="stSidebar"] .stText, 
-    [data-testid="stSidebar"] label, 
-    [data-testid="stSidebar"] .stMarkdown p,
-    [data-testid="stSidebar"] span {{
-        color: {G_TEXT_MAIN} !important;
-        font-weight: 500 !important;
-    }}
-    
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
-    [data-testid="stSidebar"] h3 {{
-        color: {G_PRIMARY} !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.02em !important;
-    }}
-
-    /* 侧边栏折叠面板美化 */
-    [data-testid="stSidebar"] .stExpander {{
-        background-color: #FFFFFF !important;
-        border: 1px solid {G_BORDER} !important;
-        border-radius: 8px !important;
-        box-shadow: none !important;
-    }}
-
-    /* 侧边栏导航单选框：致敬 Google Cloud 控制台侧边栏 */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {{
-        gap: 6px !important;
+    /* 强力锁定侧边栏导航单选框在所有主题下的对比度 */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {
+        gap: 8px !important;
         padding-top: 10px !important;
-    }}
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
-        background-color: transparent !important;
-        border-radius: 0 24px 24px 0 !important; /* 右侧圆角胶囊 */
+    }
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
+        border-radius: 8px !important; 
         padding: 10px 16px !important;
         margin: 0 !important;
         transition: all 0.15s ease-in-out;
@@ -75,84 +39,57 @@ st.markdown(f"""
         align-items: center;
         cursor: pointer;
         border: none !important;
-    }}
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
-        background-color: #F1F3F4 !important;
-    }}
-    /* 被选中时的 Google 浅蓝激活状态 */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] {{
-        background-color: #E8F0FE !important;
-    }}
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] p {{
-        color: {G_PRIMARY} !important;
+        color: var(--text-color) !important;
+    }
+    /* 悬浮与选中状态适配 */
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
+        background-color: var(--hover-color, rgba(0,0,0,0.05)) !important;
+    }
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] {
+        background-color: rgba(26, 115, 232, 0.15) !important;
+        border: 1px solid #1A73E8 !important;
+    }
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] p {
+        color: #1A73E8 !important;
         font-weight: 700 !important;
-    }}
+    }
 
-    /* === 3. 右侧主界面 (Main Content) 物理隔离保护 === */
-    /* 强制右侧主页面内所有表单标签、普通文本为高对比度墨黑色，彻底杜绝看不清 */
-    .main .block-container label,
-    .main .block-container .stText,
-    .main .block-container .stMarkdown p,
-    .main .block-container span,
-    .main .block-container div[data-testid="stWidgetLabel"] p {{
-        color: {G_TEXT_MAIN} !important;
-        font-weight: 500 !important;
-    }}
-
-    /* 大气、清晰的标题体系 */
-    .main .block-container h1 {{
-        color: {G_TEXT_MAIN} !important;
+    /* === 3. 右侧主界面 (Main Content) 样式提炼 === */
+    .main .block-container h1 {
         font-weight: 700 !important;
         letter-spacing: -0.03em !important;
         margin-bottom: 1.5rem !important;
-        border-bottom: 1px solid {G_BORDER};
+        border-bottom: 1px solid var(--border-color);
         padding-bottom: 12px;
-    }}
+        color: var(--text-color) !important;
+    }
     .main .block-container h2, 
     .main .block-container h3, 
-    .main .block-container h4 {{
-        color: {G_TEXT_MAIN} !important;
+    .main .block-container h4 {
+        color: var(--text-color) !important;
         font-weight: 600 !important;
         margin-top: 1.5rem !important;
-    }}
+    }
 
-    /* 主界面单选框（Radio）的高对比度黑色文字修复 */
-    .main .block-container .stRadio div[role="radiogroup"] label p {{
-        color: {G_TEXT_MAIN} !important;
-        font-weight: 500 !important;
-    }}
-
-    /* Google 扁平悬浮白色卡片容器 */
-    .google-card {{
-        background-color: {G_CARD_BG} !important;
-        padding: 24px !important;
+    /* Google 扁平自适应卡片 */
+    .google-adaptive-card {
+        background-color: var(--background-color) !important;
+        padding: 20px !important;
         border-radius: 8px !important;
-        border: 1px solid {G_BORDER} !important;
+        border: 1px solid var(--border-color) !important;
         margin-bottom: 16px !important;
-    }}
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1) !important;
+    }
 
-    /* 表单输入框、选择框 Google 经典扁平化设计 */
-    .main .block-container .stTextInput>div>div>input, 
-    .main .block-container .stNumberInput>div>div>input, 
-    .main .block-container .stSelectbox>div>div>div, 
-    .main .block-container .stDateInput>div>div>input {{
-        background-color: #FFFFFF !important;
-        color: {G_TEXT_MAIN} !important;
-        border: 1px solid {G_BORDER} !important;
-        border-radius: 4px !important;
-        font-weight: 400 !important;
-        padding: 8px 12px !important;
-    }}
-    /* 输入框聚焦时的 Google 蓝高亮边框 */
-    .main .block-container .stTextInput>div>div>input:focus, 
-    .main .block-container .stNumberInput>div>div>input:focus {{
-        border-color: {G_PRIMARY} !important;
-        box-shadow: 0 0 0 1px {G_PRIMARY} !important;
-    }}
+    /* 保证单选框标签文本主题自适应 */
+    .main .block-container .stRadio div[role="radiogroup"] label p {
+        color: var(--text-color) !important;
+        font-weight: 500 !important;
+    }
 
-    /* Google 经典标准矩形圆角按钮 */
-    .stButton>button {{
-        background-color: {G_PRIMARY} !important;
+    /* Google 经典标准圆角按钮 */
+    .stButton>button {
+        background-color: #1A73E8 !important;
         color: #FFFFFF !important;
         border: none !important;
         border-radius: 4px !important;
@@ -160,43 +97,31 @@ st.markdown(f"""
         font-size: 14px !important;
         padding: 10px 24px !important;
         transition: background-color 0.15s, box-shadow 0.15s;
-        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
-    }}
-    .stButton>button:hover {{
+        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3) !important;
+    }
+    .stButton>button:hover {
         background-color: #1557B0 !important;
-        box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3), 0 4px 8px 3px rgba(60,64,67,0.15) !important;
-    }}
+        box-shadow: 0 2px 6px 0 rgba(60,64,67,0.3) !important;
+    }
 
     /* 选项卡 Tabs 美化 */
-    button[data-baseweb="tab"] {{
-        color: {G_TEXT_MUTED} !important;
+    button[data-baseweb="tab"] {
         font-size: 15px !important;
         font-weight: 500 !important;
         border-bottom-width: 3px !important;
-    }}
-    button[data-baseweb="tab"][aria-selected="true"] {{
-        color: {G_PRIMARY} !important;
-        border-bottom-color: {G_PRIMARY} !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #1A73E8 !important;
+        border-bottom-color: #1A73E8 !important;
         font-weight: 600 !important;
-    }}
+    }
 
-    /* 进度条轨道与滑块 */
-    .stProgress > div > div {{
-        background-color: #E8EAED !important;
-        height: 8px !important;
-        border-radius: 4px !important;
-    }}
-    .stProgress > div > div > div > div {{
-        background-color: {G_PRIMARY} !important;
-        border-radius: 4px !important;
-    }}
-
-    /* 数据表格美化 */
-    [data-testid="stDataTable"] {{
-        border: 1px solid {G_BORDER} !important;
+    /* 数据表格自适应美化 */
+    [data-testid="stDataTable"] {
+        border: 1px solid var(--border-color) !important;
         border-radius: 8px !important;
         overflow: hidden !important;
-    }}
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -325,7 +250,7 @@ for l in ledgers:
 DYNAMIC_ACCOUNT_LIST = sorted(list(dynamic_accounts))
 
 # ==========================================
-# 3. 🗺️ 左侧导航重构：高对比度、大气的命名
+# 3. 🗺️ 左侧导航大气命名
 # ==========================================
 menu_options = [
     "📊 集团核心业绩与双轨 KPI 战略大屏", 
@@ -355,62 +280,69 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
 
     st.markdown(f"### 🎯 {current_year} 年度双轨 KPI 实时观测中枢")
     
-    # --- KPI 卡片渲染器 (Google 极简无阴影高质感边框卡片) ---
-    def render_kpi_card(title, value, sub_text="", accent_color="#1A73E8"):
+    # 自适应自建卡片：避免硬编码背景色导致暗黑模式异常，直接利用 CSS 变量
+    def render_kpi_card(title, value, sub_text="", border_color="#1A73E8"):
         return f"""
-        <div class="google-card" style="border-left: 5px solid {accent_color} !important;">
-            <p style="margin:0; font-size:13px; color:{G_TEXT_MUTED}; font-weight:600; text-transform: uppercase; letter-spacing: 0.5px;">{title}</p>
-            <h1 style="margin:10px 0; font-size:30px; color:{G_TEXT_MAIN}; font-weight:700; border:none !important; padding:0 !important; letter-spacing:-0.02em;">{value}</h1>
-            <p style="margin:0; font-size:12px; color:{accent_color}; font-weight:600;">{sub_text}</p>
+        <div class="google-adaptive-card" style="border-left: 5px solid {border_color} !important;">
+            <p style="margin:0; font-size:13px; color: var(--text-color); opacity: 0.7; font-weight:600; text-transform: uppercase;">{title}</p>
+            <h2 style="margin:8px 0; font-size:26px; color: var(--text-color); font-weight:700; border:none !important; padding:0 !important; letter-spacing:-0.02em;">{value}</h2>
+            <p style="margin:0; font-size:12px; color:{border_color}; font-weight:600;">{sub_text}</p>
         </div>
         """
+    
+    # 修复图2：将4个指标拆成2列x2排，彻底杜绝换行，使数据大小和高度高度对称一致！
+    st.markdown("#### 💸 确认收入 KPI 数据链")
+    row1_col1, row1_col2 = st.columns(2)
+    with row1_col1:
+        st.markdown(render_kpi_card(f"{current_year}年度确收指标", f"¥{cfg_rev:,.2f}", "年度财务确收底线", "#757575"), unsafe_allow_html=True)
+    with row1_col2:
+        st.markdown(render_kpi_card("大盘当前已确收", f"¥{annual_revenue_done:,.2f}", f"🎯 达成率 {rev_annual_rate*100:.1f}%", "#1A73E8"), unsafe_allow_html=True)
         
-    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-    m_col1.markdown(render_kpi_card(f"{current_year}年度确收指标", f"¥{cfg_rev:,.2f}", "年度财务确收底线", "#5F6368"), unsafe_allow_html=True)
-    m_col2.markdown(render_kpi_card("大盘当前已确收", f"¥{annual_revenue_done:,.2f}", f"🎯 达成率 {rev_annual_rate*100:.1f}%", G_PRIMARY), unsafe_allow_html=True)
-    m_col3.markdown(render_kpi_card(f"{current_year}年度回款目标", f"¥{cfg_col:,.2f}", "年度实际资金到账红线", "#5F6368"), unsafe_allow_html=True)
-    m_col4.markdown(render_kpi_card("大盘累计资金进账", f"¥{annual_collection_done:,.2f}", f"⚡ 达成率 {col_annual_rate*100:.1f}%", "#12B5CB"), unsafe_allow_html=True)
+    st.markdown("#### 🏦 资金回款 KPI 资金链")
+    row2_col1, row2_col2 = st.columns(2)
+    with row2_col1:
+        st.markdown(render_kpi_card(f"{current_year}年度回款目标", f"¥{cfg_col:,.2f}", "年度资金到账安全红线", "#757575"), unsafe_allow_html=True)
+    with row2_col2:
+        st.markdown(render_kpi_card("大盘累计资金进账", f"¥{annual_collection_done:,.2f}", f"⚡ 达成率 {col_annual_rate*100:.1f}%", "#00B0FF"), unsafe_allow_html=True)
     
     # 推进进度条
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f"**🔷 {current_year}年度确认收入 KPI 推进链:**")
+    st.markdown(f"**🔷 {current_year}年度确认收入 KPI 推进进度:**")
     st.progress(min(1.0, rev_annual_rate))
-    st.markdown(f"**🔷 {current_year}年度实际回款 KPI 资金链脉搏:**")
+    st.markdown(f"**🔷 {current_year}年度实际回款 KPI 资金链进度:**")
     st.progress(min(1.0, col_annual_rate))
     
     st.markdown("---")
     
-    # 历史演进模块
+    # 历史演进模块（利用 st.container 替代 Markdown，彻底杀灭空白长白框！）
     st.markdown('<h3>🗂️ 跨断代全景历史业绩演进脉络</h3>', unsafe_allow_html=True)
-    st.markdown('<div class="google-card">', unsafe_allow_html=True)
-    
-    history_list = []
-    for yr, data in HISTORY_ARCHIVE.items():
-        history_list.append({"年份": f"{yr}年", "确认收入": float(data["revenue"]), "到账回款": float(data["collection"])})
-    history_list.append({"年份": f"{current_year}年(实时)", "确认收入": float(annual_revenue_done), "到账回款": float(annual_collection_done)})
-    
-    df_history_chart = pd.DataFrame(history_list)
-    df_history_chart["确认收入"] = pd.to_numeric(df_history_chart["确认收入"]).fillna(0.0)
-    df_history_chart["到账回款"] = pd.to_numeric(df_history_chart["到账回款"]).fillna(0.0)
-    
-    try:
-        fig_history = px.bar(
-            df_history_chart, x="年份", y=["确认收入", "到账回款"], 
-            barmode="group", text_auto='.3s', title="多跨度年度营收/进账全景历史推演",
-            template="plotly_white",
-            color_discrete_sequence=[G_PRIMARY, "#9AA0A6"]
-        )
-        fig_history.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)', 
-            paper_bgcolor='rgba(0,0,0,0)', 
-            font_color=G_TEXT_MUTED, 
-            title_font_color=G_TEXT_MAIN,
-            xaxis=dict(showgrid=False),
-            yaxis=dict(showgrid=True, gridcolor="#E8EAED")
-        )
-        st.plotly_chart(fig_history, use_container_width=True)
-    except: st.info("📊 演进图深度加载中...")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        history_list = []
+        for yr, data in HISTORY_ARCHIVE.items():
+            history_list.append({"年份": f"{yr}年", "确认收入": float(data["revenue"]), "到账回款": float(data["collection"])})
+        history_list.append({"年份": f"{current_year}年(实时)", "确认收入": float(annual_revenue_done), "到账回款": float(annual_collection_done)})
+        
+        df_history_chart = pd.DataFrame(history_list)
+        df_history_chart["确认收入"] = pd.to_numeric(df_history_chart["确认收入"]).fillna(0.0)
+        df_history_chart["到账回款"] = pd.to_numeric(df_history_chart["到账回款"]).fillna(0.0)
+        
+        try:
+            fig_history = px.bar(
+                df_history_chart, x="年份", y=["确认收入", "到账回款"], 
+                barmode="group", text_auto='.3s', title="多跨度年度营收/进账全景历史推演",
+                template="plotly_white",
+                color_discrete_sequence=["#1A73E8", "#9AA0A6"]
+            )
+            # 全自适应底色，彻底无缝配合 Light/Dark 模式
+            fig_history.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)', 
+                font_color="gray", 
+                xaxis=dict(showgrid=False),
+                yaxis=dict(showgrid=True, gridcolor="rgba(128,128,128,0.2)")
+            )
+            st.plotly_chart(fig_history, use_container_width=True)
+        except: st.info("📊 演进图深度加载中...")
 
 # ==========================================
 # 5. 页面 2: 通信业务拉通一体化智能流水台账
@@ -418,14 +350,14 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
 elif menu == "📝 通信业务拉通一体化智能流水台账":
     st.title("通信业务拉通一体化智能流水台账")
     
-    st.markdown('<div class="google-card">', unsafe_allow_html=True)
-    f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
-    unique_projects = ["全部项目"] + sorted(list(set(p["name"] for p in projects.values())))
-    unique_provinces = ["全部省份"] + sorted(list(set(o["province"] for o in orders.values())))
-    selected_project = f_col1.selectbox("🎯 关联框架项目：", unique_projects)
-    selected_province = f_col2.selectbox("📍 订单所属省份：", unique_provinces)
-    date_range = f_col3.date_input("📅 锁定业务周期范围：", value=(date(date.today().year, 1, 1), date.today()))
-    st.markdown('</div>', unsafe_allow_html=True)
+    # 修复图1：使用原生的 st.container(border=True) 取代 markdown card，彻底杜绝拉垮的空框！
+    with st.container(border=True):
+        f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
+        unique_projects = ["全部项目"] + sorted(list(set(p["name"] for p in projects.values())))
+        unique_provinces = ["全部省份"] + sorted(list(set(o["province"] for o in orders.values())))
+        selected_project = f_col1.selectbox("🎯 关联框架项目：", unique_projects)
+        selected_province = f_col2.selectbox("📍 订单所属省份：", unique_provinces)
+        date_range = f_col3.date_input("📅 锁定业务周期范围：", value=(date(date.today().year, 1, 1), date.today()))
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("🚧 售前项目框架水位安全警报")
@@ -439,7 +371,8 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
         project_rows.append({"项目框架名称": p["name"], "客户简称": p["client"], "框架标的总额": p["target"], "已下订单含税总额": p["amt_with_tax_total"], "额度消耗比例": f"{ratio*100:.1f}%", "安全预警": warning_status, "创建日期": p["bid_date"], "当前状态": p["stage"]})
     if project_rows:
         df_p_view = pd.DataFrame(project_rows)
-        st.dataframe(df_p_view.style.map(lambda v: "background-color: #FCE8E6; color: #C5221F; font-weight: bold;" if "🚨" in str(v) else ("background-color: #FEF7E0; color: #B06000; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
+        # 用高对比度自适应色彩美化预警，无论明暗均清晰可见
+        st.dataframe(df_p_view.style.map(lambda v: "background-color: rgba(197, 34, 31, 0.15); color: #FF5252; font-weight: bold;" if "🚨" in str(v) else ("background-color: rgba(176, 96, 0, 0.15); color: #FFD740; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("🤝 中标订单及【确收/回款】生命周期流水")
@@ -468,7 +401,7 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
 elif menu == "➕ 核心业务数据全生命周期控制中心":
     st.title("核心业务数据全生命周期控制中心")
     
-    # 严格锁死主页面 label 文字的高对比度
+    # 使用 container 包裹，消除乱飞的 HTML 白卡片
     op_type = st.radio("请选择维护操作类型：", ["🆕 录入全新数据", "⚙️ 修改已有信息"], horizontal=True)
     st.markdown("---")
 
@@ -476,150 +409,150 @@ elif menu == "➕ 核心业务数据全生命周期控制中心":
         sub_step = st.radio("请选择录入的业务阶段：", ["🎯 项目前期录入", "🤝 中标订单录入", "📈 确收登记", "🏦 回款销账"], horizontal=True) 
         st.markdown("---")
         
-        st.markdown('<div class="google-card">', unsafe_allow_html=True)
-        if sub_step == "🎯 项目前期录入":
-            with st.form("p_form", clear_on_submit=True):
-                st.markdown("##### 填写项目前期框架协议")
-                p_name = st.text_input("1. 项目框架/名称 *")
-                p_client = st.text_input("2. 客户简称 *")
-                p_target = st.number_input("3. 项目框架标的额 (元) *", min_value=0.0)
-                p_stage = st.selectbox("4. 项目阶段 *", PROJECT_STAGES)
-                p_bid_date = st.date_input("5. 开标/签署时间 *", value=datetime.now()).strftime("%Y-%m-%d")
-                if st.form_submit_button("💾 确认保存至 Supabase"):
-                    if not p_name or not p_client: st.error("❌ 项目名称和客户简称为必填项！")
-                    else:
-                        payload = {"id": f"PRJ{int(datetime.now().timestamp())}", "name": p_name, "client": p_client, "target": p_target, "stage": p_stage, "bid_date": p_bid_date}
-                        res = requests.post(f"{SB_URL}/rest/v1/projects", headers=HEADERS, json=payload, timeout=5)
-                        if res.status_code in [200, 201]: st.success("✔️ 项目入库完成！"); st.rerun()
-
-        elif sub_step == "🤝 中标订单录入":
-            if not projects: st.warning("⚠️ 暂无前置项目！")
-            else:
-                p_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
-                sel_p = st.selectbox("11. 关联源头框架项目 *", list(p_opts.keys()))
-                o_id = st.text_input("1. 客户正式订单号 *")
-                o_date = st.date_input("2. 订单下发日期 *", value=datetime.now()).strftime("%Y-%m-%d")
-                o_province = st.text_input("3. 区域省份 *")
-                o_client = st.text_input("4. 客户简称 *")
-                o_product = st.text_input("5. 订购产品明细 *")
-                cp, cr, cq = st.columns(3)
-                price = cp.number_input("6. 单价(不含税) *", min_value=0.0)
-                tax_rate = cr.number_input("7. 税率 *", min_value=0.0, max_value=1.0, value=0.13)
-                qty = cq.number_input("8. 数量 *", min_value=1, value=1)
-                amt_no_tax = price * qty
-                amt_with_tax = amt_no_tax * (1 + tax_rate)
-                st.info(f"📊 自动核税预览含税额: ¥{amt_with_tax:,.2f}")
-                o_p_name = st.text_input("12. 对应订单项目名称 *")
-
-                if st.button("⚡ 确认订单下发入库"):
-                    if not o_id or not o_province or not o_client or not o_product or not o_p_name: st.error("❌ 请完整填写必填字段！")
-                    else:
-                        pid_ref = p_opts[sel_p]
-                        unique_internal_id = f"{o_id.strip()}_{int(datetime.now().timestamp() * 1000)}"
-                        requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_ref}", headers=HEADERS, json={"stage": "已中标"}, timeout=5)
-                        o_payload = {"id": unique_internal_id, "project_ref": pid_ref, "order_date": o_date, "province": o_province, "client": o_client, "product": o_product, "price_no_tax": price, "tax_rate": tax_rate, "quantity": qty, "amt_no_tax": amt_no_tax, "amt_with_tax": amt_with_tax, "order_p_name": o_p_name}
-                        res = requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=o_payload, timeout=5)
-                        if res.status_code in [200, 201]: st.success("✔️ 分项产品明细入库成功！"); st.rerun()
-
-        elif sub_step == "📈 确收登记":
-            if not orders: st.warning("⚠️ 系统内暂无订单。")
-            else:
-                with st.form("r_form", clear_on_submit=True):
-                    st.markdown("##### 填写确认收入流水信息")
-                    o_opts = {f"订单:{o['raw_id']} ({o['product']} | 含税:¥{o['amt_with_tax']})": oid for oid, o in orders.items()}
-                    sel_o = st.selectbox("1. 选择产品分项 *", list(o_opts.keys())); oid_final = o_opts[sel_o]
-                    r_amt = st.number_input("2. 本次确收金额 (元) *", min_value=0.0)
-                    r_date = st.date_input("3. 实际确认收入日期 *", value=datetime.now()).strftime("%Y-%m-%d")
-                    if st.form_submit_button("⚡ 提交确收"):
-                        if r_amt <= 0: st.error("❌ 金额需大于0元！")
+        with st.container(border=True):
+            if sub_step == "🎯 项目前期录入":
+                with st.form("p_form", clear_on_submit=True):
+                    st.markdown("##### 填写项目前期框架协议")
+                    p_name = st.text_input("1. 项目框架/名称 *")
+                    p_client = st.text_input("2. 客户简称 *")
+                    p_target = st.number_input("3. 项目框架标的额 (元) *", min_value=0.0)
+                    p_stage = st.selectbox("4. 项目阶段 *", PROJECT_STAGES)
+                    p_bid_date = st.date_input("5. 开标/签署时间 *", value=datetime.now()).strftime("%Y-%m-%d")
+                    if st.form_submit_button("💾 确认保存至 Supabase"):
+                        if not p_name or not p_client: st.error("❌ 项目名称和客户简称为必填项！")
                         else:
-                            res = requests.post(f"{SB_URL}/rest/v1/revenues", headers=HEADERS, json={"order_ref": oid_final, "amount": r_amt, "revenue_date": r_date}, timeout=5)
-                            if res.status_code in [200, 201]: st.success("🎉 确收流水已登记！"); st.rerun()
+                            payload = {"id": f"PRJ{int(datetime.now().timestamp())}", "name": p_name, "client": p_client, "target": p_target, "stage": p_stage, "bid_date": p_bid_date}
+                            res = requests.post(f"{SB_URL}/rest/v1/projects", headers=HEADERS, json=payload, timeout=5)
+                            if res.status_code in [200, 201]: st.success("✔️ 项目入库完成！"); st.rerun()
 
-        elif sub_step == "🏦 回款销账":
-            is_legacy_history = st.checkbox("⏳ 陈年遗留历史挂账核销")
-            with st.form("c_form", clear_on_submit=True):
-                st.markdown("##### 填写财务到账及发票匹配销账信息")
-                if not is_legacy_history:
-                    if not orders: st.warning("⚠️ 系统内暂无订单。"); st.form_submit_button("不可提交", disabled=True); raw_oid_input = ""
-                    else:
-                        o_opts = {f"订单:{o['raw_id']} (剩余尾款:¥{o['amt_with_tax'] - o['collect_total']:.2f})": oid for oid, o in orders.items()}
-                        selected_order_labels = st.multiselect("1. 选择本次合并核销的多个订单分项*", list(o_opts.keys()))
-                        raw_oid_input = ",".join([o_opts[lbl] for lbl in selected_order_labels])
-                else: raw_oid_input = st.text_input("1. 手动输入历史客户订单号 *")
+            elif sub_step == "🤝 中标订单录入":
+                if not projects: st.warning("⚠️ 暂无前置项目！")
+                else:
+                    p_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
+                    sel_p = st.selectbox("11. 关联源头框架项目 *", list(p_opts.keys()))
+                    o_id = st.text_input("1. 客户正式订单号 *")
+                    o_date = st.date_input("2. 订单下发日期 *", value=datetime.now()).strftime("%Y-%m-%d")
+                    o_province = st.text_input("3. 区域省份 *")
+                    o_client = st.text_input("4. 客户简称 *")
+                    o_product = st.text_input("5. 订购产品明细 *")
+                    cp, cr, cq = st.columns(3)
+                    price = cp.number_input("6. 单价(不含税) *", min_value=0.0)
+                    tax_rate = cr.number_input("7. 税率 *", min_value=0.0, max_value=1.0, value=0.13)
+                    qty = cq.number_input("8. 数量 *", min_value=1, value=1)
+                    amt_no_tax = price * qty
+                    amt_with_tax = amt_no_tax * (1 + tax_rate)
+                    st.info(f"📊 自动核税预览含税额: ¥{amt_with_tax:,.2f}")
+                    o_p_name = st.text_input("12. 对应订单项目名称 *")
 
-                c_amt = st.number_input("2. 本次财务到账回款总额 (元) *", min_value=0.0)
-                c_date = st.date_input("3. 实际回款到账日期 *", value=datetime.now()).strftime("%Y-%m-%d")
-                c_invoice = st.text_input("4. 匹配销账发票号 / 凭证号 (选填)")
-
-                if st.form_submit_button("⚡ 执行销账"):
-                    cleaned_input = str(raw_oid_input).strip()
-                    if not cleaned_input: st.error("❌ 必须选择至少一个识别节点！")
-                    elif c_amt <= 0: st.error("❌ 金额需大于0元！")
-                    else:
-                        target_orders = [x.strip() for x in cleaned_input.split(",") if x.strip()]
-                        if len(target_orders) == 1:
-                            single_oid = target_orders[0]
-                            c_payload = {"order_ref": single_oid, "amount": c_amt, "collection_date": c_date, "invoice_no": c_invoice if c_invoice else f"REG_{int(datetime.now().timestamp())}"}
-                            requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
+                    if st.button("⚡ 确认订单下发入库"):
+                        if not o_id or not o_province or not o_client or not o_product or not o_p_name: st.error("❌ 请完整填写必填字段！")
                         else:
-                            debt_dict = {tid: max(0.0, orders[tid]["amt_with_tax"] - orders[tid]["collect_total"]) for tid in target_orders if tid in orders}
-                            total_debt = sum(debt_dict.values())
-                            remaining_pool = c_amt
-                            for idx, target_id in enumerate(target_orders):
-                                if idx == len(target_orders) - 1: split_amt = remaining_pool
-                                else:
-                                    split_amt = round(c_amt * (debt_dict.get(target_id, 0.0) / total_debt), 2) if total_debt > 0 else round(c_amt / len(target_orders), 2)
-                                    remaining_pool -= split_amt
-                                each_payload = {"order_ref": target_id, "amount": split_amt, "collection_date": c_date, "invoice_no": f"{c_invoice}_P{idx}" if c_invoice else f"MUL_{int(datetime.now().timestamp())}_{idx}"}
-                                requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=each_payload, timeout=5)
-                        st.success("🎉 分批次/多订单流水分摊销账完毕！"); st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+                            pid_ref = p_opts[sel_p]
+                            unique_internal_id = f"{o_id.strip()}_{int(datetime.now().timestamp() * 1000)}"
+                            requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_ref}", headers=HEADERS, json={"stage": "已中标"}, timeout=5)
+                            o_payload = {"id": unique_internal_id, "project_ref": pid_ref, "order_date": o_date, "province": o_province, "client": o_client, "product": o_product, "price_no_tax": price, "tax_rate": tax_rate, "quantity": qty, "amt_no_tax": amt_no_tax, "amt_with_tax": amt_with_tax, "order_p_name": o_p_name}
+                            res = requests.post(f"{SB_URL}/rest/v1/orders", headers=HEADERS, json=o_payload, timeout=5)
+                            if res.status_code in [200, 201]: st.success("✔️ 分项产品明细入库成功！"); st.rerun()
+
+            elif sub_step == "📈 确收登记":
+                if not orders: st.warning("⚠️ 系统内暂无订单。")
+                else:
+                    with st.form("r_form", clear_on_submit=True):
+                        st.markdown("##### 填写确认收入流水信息")
+                        o_opts = {f"订单:{o['raw_id']} ({o['product']} | 含税:¥{o['amt_with_tax']})": oid for oid, o in orders.items()}
+                        sel_o = st.selectbox("1. 选择产品分项 *", list(o_opts.keys())); oid_final = o_opts[sel_o]
+                        r_amt = st.number_input("2. 本次确收金额 (元) *", min_value=0.0)
+                        r_date = st.date_input("3. 实际确认收入日期 *", value=datetime.now()).strftime("%Y-%m-%d")
+                        if st.form_submit_button("⚡ 提交确收"):
+                            if r_amt <= 0: st.error("❌ 金额需大于0元！")
+                            else:
+                                res = requests.post(f"{SB_URL}/rest/v1/revenues", headers=HEADERS, json={"order_ref": oid_final, "amount": r_amt, "revenue_date": r_date}, timeout=5)
+                                if res.status_code in [200, 201]: st.success("🎉 确收流水已登记！"); st.rerun()
+
+            elif sub_step == "🏦 回款销账":
+                is_legacy_history = st.checkbox("⏳ 陈年遗留历史挂账核销")
+                with st.form("c_form", clear_on_submit=True):
+                    st.markdown("##### 填写财务到账及发票匹配销账信息")
+                    if not is_legacy_history:
+                        if not orders: st.warning("⚠️ 系统内暂无订单。"); st.form_submit_button("不可提交", disabled=True); raw_oid_input = ""
+                        else:
+                            o_opts = {f"订单:{o['raw_id']} (剩余尾款:¥{o['amt_with_tax'] - o['collect_total']:.2f})": oid for oid, o in orders.items()}
+                            selected_order_labels = st.multiselect("1. 选择本次合并核销的多个订单分项*", list(o_opts.keys()))
+                            raw_oid_input = ",".join([o_opts[lbl] for lbl in selected_order_labels])
+                    else: raw_oid_input = st.text_input("1. 手动输入历史客户订单号 *")
+
+                    c_amt = st.number_input("2. 本次财务到账回款总额 (元) *", min_value=0.0)
+                    c_date = st.date_input("3. 实际回款到账日期 *", value=datetime.now()).strftime("%Y-%m-%d")
+                    c_invoice = st.text_input("4. 匹配销账发票号 / 凭证号 (选填)")
+
+                    if st.form_submit_button("⚡ 执行销账"):
+                        cleaned_input = str(raw_oid_input).strip()
+                        if not cleaned_input: st.error("❌ 必须选择至少一个识别节点！")
+                        elif c_amt <= 0: st.error("❌ 金额需大于0元！")
+                        else:
+                            target_orders = [x.strip() for x in cleaned_input.split(",") if x.strip()]
+                            if len(target_orders) == 1:
+                                single_oid = target_orders[0]
+                                c_payload = {"order_ref": single_oid, "amount": c_amt, "collection_date": c_date, "invoice_no": c_invoice if c_invoice else f"REG_{int(datetime.now().timestamp())}"}
+                                requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=c_payload, timeout=5)
+                            else:
+                                debt_dict = {tid: max(0.0, orders[tid]["amt_with_tax"] - orders[tid]["collect_total"]) for tid in target_orders if tid in orders}
+                                total_debt = sum(debt_dict.values())
+                                remaining_pool = c_amt
+                                for idx, target_id in enumerate(target_orders):
+                                    if idx == len(target_orders) - 1: split_amt = remaining_pool
+                                    else:
+                                        split_amt = round(c_amt * (debt_dict.get(target_id, 0.0) / total_debt), 2) if total_debt > 0 else round(c_amt / len(target_orders), 2)
+                                        remaining_pool -= split_amt
+                                    each_payload = {"order_ref": target_id, "amount": split_amt, "collection_date": c_date, "invoice_no": f"{c_invoice}_P{idx}" if c_invoice else f"MUL_{int(datetime.now().timestamp())}_{idx}"}
+                                    requests.post(f"{SB_URL}/rest/v1/collections", headers=HEADERS, json=each_payload, timeout=5)
+                            st.success("🎉 分批次销账完毕！"); st.rerun()
 
     elif op_type == "⚙️ 修改已有信息":
         edit_target = st.radio("请选择需要修改的内容类型：", ["🎯 修改框架项目", "🤝 修改订单明细"], horizontal=True)
         st.markdown("---")
-        if edit_target == "🎯 修改框架项目":
-            if not projects: st.info("云端暂无数据可修改")
-            else:
-                p_edit_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
-                sel_edit_p = st.selectbox("请选择要修改的框架项目：", list(p_edit_opts.keys())); pid_edit = p_edit_opts[sel_edit_p]; old_p = projects[pid_edit]
-                up_p_name = st.text_input("项目框架/名称", value=old_p["name"])
-                up_p_client = st.text_input("客户简称", value=old_p["client"])
-                up_p_target = st.number_input("框架标的总额(元)", min_value=0.0, value=old_p["target"])
-                up_p_stage = st.selectbox("项目进展状态", PROJECT_STAGES, index=PROJECT_STAGES.index(old_p["stage"]))
-                o_edit_reason = st.text_area("🔧 请输入本次项目调整的原因备注 * (强审计留痕)")
-                if st.button("💾 覆写更新项目"):
-                    if not o_edit_reason.strip(): st.error("❌ 必须填写修改原因！")
-                    else:
-                        trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {o_edit_reason.strip()}]"
-                        up_payload = {"name": up_p_name, "client": up_p_client, "target": up_p_target, "stage": up_p_stage + trace_stamp, "bid_date": old_p["bid_date"]}
-                        requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
-                        st.success("🎉 项目强审计链更新成功！"); st.rerun()
+        with st.container(border=True):
+            if edit_target == "🎯 修改框架项目":
+                if not projects: st.info("云端暂无数据可修改")
+                else:
+                    p_edit_opts = {f"{p['name']} ({p['client']})": pid for pid, p in projects.items()}
+                    sel_edit_p = st.selectbox("请选择要修改的框架项目：", list(p_edit_opts.keys())); pid_edit = p_edit_opts[sel_edit_p]; old_p = projects[pid_edit]
+                    up_p_name = st.text_input("项目框架/名称", value=old_p["name"])
+                    up_p_client = st.text_input("客户简称", value=old_p["client"])
+                    up_p_target = st.number_input("框架标的总额(元)", min_value=0.0, value=old_p["target"])
+                    up_p_stage = st.selectbox("项目进展状态", PROJECT_STAGES, index=PROJECT_STAGES.index(old_p["stage"]))
+                    o_edit_reason = st.text_area("🔧 请输入本次项目调整的原因备注 * (强审计留痕)")
+                    if st.button("💾 覆写更新项目"):
+                        if not o_edit_reason.strip(): st.error("❌ 必须填写修改原因！")
+                        else:
+                            trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {o_edit_reason.strip()}]"
+                            up_payload = {"name": up_p_name, "client": up_p_client, "target": up_p_target, "stage": up_p_stage + trace_stamp, "bid_date": old_p["bid_date"]}
+                            requests.patch(f"{SB_URL}/rest/v1/projects?id=eq.{pid_edit}", headers=HEADERS, json=up_payload, timeout=5)
+                            st.success("🎉 项目强审计链更新成功！"); st.rerun()
 
-        elif edit_target == "🤝 修改订单明细":
-            if not orders: st.info("云端暂无订单数据可修改")
-            else:
-                o_edit_opts = {f"订单号:{o['raw_id']} | 品类:{o['product']}": oid for oid, o in orders.items()}
-                sel_edit_o = st.selectbox("请选择更正订单分项：", list(o_edit_opts.keys())); oid_edit = o_edit_opts[sel_edit_o]; old_o = orders[oid_edit]
-                up_o_province = st.text_input("省份", value=old_o["province"])
-                up_o_client = st.text_input("客户简称", value=old_o["client"])
-                up_o_product = st.text_input("订单产品", value=old_o["product"].split(" [修改痕迹")[0])
-                up_o_p_name = st.text_input("订单项目名称", value=old_o["order_p_name"])
-                cep, cer, ceq = st.columns(3)
-                up_price = cep.number_input("单价(不含税)", min_value=0.0, value=old_o["price_no_tax"])
-                up_tax_rate = cer.number_input("税率", min_value=0.0, max_value=1.0, value=old_o["tax_rate"])
-                up_qty = ceq.number_input("数量", min_value=1, value=int(old_o["quantity"]))
-                new_no_tax = up_price * up_qty
-                new_tax_in = new_no_tax * (1 + up_tax_rate)
-                o_edit_reason = st.text_area("🔧 请输入本次订单调整的原因备注 * (强审计留痕)")
-                if st.button("💾 覆写更新订单分项"):
-                    if not o_edit_reason.strip(): st.error("❌ 必须填写修改原因！")
-                    else:
-                        trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {o_edit_reason.strip()}]"
-                        up_o_payload = {"province": up_o_province, "client": up_o_client, "product": up_o_product + trace_stamp, "order_p_name": up_o_p_name, "price_no_tax": up_price, "tax_rate": up_tax_rate, "quantity": up_qty, "amt_no_tax": new_no_tax, "amt_with_tax": new_tax_in, "order_date": old_o["date"]}
-                        requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
-                        st.success("🎉 订单分项明细审计链覆写成功！"); st.rerun()
+            elif edit_target == "🤝 修改订单明细":
+                if not orders: st.info("云端暂无订单数据可修改")
+                else:
+                    o_edit_opts = {f"订单号:{o['raw_id']} | 品类:{o['product']}": oid for oid, o in orders.items()}
+                    sel_edit_o = st.selectbox("请选择更正订单分项：", list(o_edit_opts.keys())); oid_edit = o_edit_opts[sel_edit_o]; old_o = orders[oid_edit]
+                    up_o_province = st.text_input("省份", value=old_o["province"])
+                    up_o_client = st.text_input("客户简称", value=old_o["client"])
+                    up_o_product = st.text_input("订单产品", value=old_o["product"].split(" [修改痕迹")[0])
+                    up_o_p_name = st.text_input("订单项目名称", value=old_o["order_p_name"])
+                    cep, cer, ceq = st.columns(3)
+                    up_price = cep.number_input("单价(不含税)", min_value=0.0, value=old_o["price_no_tax"])
+                    up_tax_rate = cer.number_input("税率", min_value=0.0, max_value=1.0, value=old_o["tax_rate"])
+                    up_qty = ceq.number_input("数量", min_value=1, value=int(old_o["quantity"]))
+                    new_no_tax = up_price * up_qty
+                    new_tax_in = new_no_tax * (1 + up_tax_rate)
+                    o_edit_reason = st.text_area("🔧 请输入本次订单调整的原因备注 * (强审计留痕)")
+                    if st.button("💾 覆写更新订单分项"):
+                        if not o_edit_reason.strip(): st.error("❌ 必须填写修改原因！")
+                        else:
+                            trace_stamp = f" [修改痕迹 {datetime.now().strftime('%Y-%m-%d')}: {o_edit_reason.strip()}]"
+                            up_o_payload = {"province": up_o_province, "client": up_o_client, "product": up_o_product + trace_stamp, "order_p_name": up_o_p_name, "price_no_tax": up_price, "tax_rate": up_tax_rate, "quantity": up_qty, "amt_no_tax": new_no_tax, "amt_with_tax": new_tax_in, "order_date": old_o["date"]}
+                            requests.patch(f"{SB_URL}/rest/v1/orders?id=eq.{oid_edit}", headers=HEADERS, json=up_o_payload, timeout=5)
+                            st.success("🎉 订单分项明细审计链覆写成功！"); st.rerun()
 
 # ==========================================
 # 7. 🏦 现代复式财务云账本 (hledger 架构)
@@ -627,101 +560,100 @@ elif menu == "➕ 核心业务数据全生命周期控制中心":
 elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
     st.title("现代复式财务云账本 (hledger 架构)")
     
-    st.markdown('<div class="google-card">', unsafe_allow_html=True)
-    f_tabs = st.tabs(["📊 资产分布雷达分析", "📖 Journal 账务明细流水长卷", "✍️ 复合记账表单 (多级平衡校验)"])
-    
-    with f_tabs[0]:
-        if not ledgers: st.info("云端暂无复式记账明细。")
-        else:
-            df_l = pd.DataFrame(ledgers)
-            df_exp = df_l[df_l["account_to"].str.startswith("Expenses:")]
-            sc1, sc2 = st.columns(2)
-            with sc1:
-                if not df_exp.empty:
-                    fig_pie_l = px.pie(
-                        df_exp, names="account_to", values="amount", 
-                        hole=0.5, template="plotly_white", title="Exp. 支出类科目占比分析",
-                        color_discrete_sequence=px.colors.qualitative.Pastel
-                    )
-                    fig_pie_l.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color=G_TEXT_MUTED)
-                    st.plotly_chart(fig_pie_l, use_container_width=True)
-            with sc2:
-                all_tag_stats = {}
-                for _, row in df_l.iterrows():
-                    raw_tags = str(row["tags"]).replace(",", " ").replace("，", " ").split()
-                    for t in raw_tags:
-                        t = t.strip().lower()
-                        if t: all_tag_stats[t] = all_tag_stats.get(t, 0.0) + row["amount"]
-                if all_tag_stats:
-                    df_tags = pd.DataFrame(list(all_tag_stats.items()), columns=["自定义标签Tag", "涉及总金额"]).sort_values(by="涉及总金额", ascending=False)
-                    fig_tag_bar = px.bar(
-                        df_tags, x="自定义标签Tag", y="涉及总金额", text_auto='.2s', 
-                        template="plotly_white", title="动态自由标签穿透分析",
-                        color_discrete_sequence=[G_PRIMARY]
-                    )
-                    fig_tag_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color=G_TEXT_MUTED, xaxis=dict(showgrid=False))
-                    st.plotly_chart(fig_tag_bar, use_container_width=True)
-
-    with f_tabs[1]:
-        if ledgers:
-            df_journal = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
-            df_journal.columns = ["交易核算日期", "核心经济事务描述", "资金去处 (贷/From)", "资金归结 (借/To)", "涉及金额 (元)", "流向Tags", "详细备注"]
-            st.dataframe(df_journal, use_container_width=True, hide_index=True)
-
-    with f_tabs[2]:
-        st.subheader("✍️ 录入多科目复式分录（借贷平衡配平锁定）")
-        l_date = st.date_input("1. 设定记账日期", value=datetime.now()).strftime("%Y-%m-%d")
-        l_desc = st.text_input("2. 交易事务/商户描述说明 *", placeholder="如：报销与自费组合购买设备")
-        st.markdown("---")
-        if "legs_count" not in st.session_state: st.session_state.legs_count = 2
+    with st.container(border=True):
+        f_tabs = st.tabs(["📊 资产分布雷达分析", "📖 Journal 账务明细流水长卷", "✍️ 复合记账表单 (多级平衡校验)"])
         
-        leg_data = []
-        for i in range(st.session_state.legs_count):
-            c1, c2, c3 = st.columns([3, 4, 2])
-            direction = c1.selectbox(f"交易动向#{i+1}", ["去向 (借/To/支出增加或资产增加)", "来源 (贷/From/资产减少或收入)"], key=f"dir_{i}")
-            acc_select = c2.selectbox(f"选择科目#{i+1}", DYNAMIC_ACCOUNT_LIST + ["[手动键入全新层级科目]"], key=f"acc_sel_{i}")
-            acc_final = c2.text_input(f"✍️ 节点名称#{i+1}", placeholder="如 Expenses:Daily", key=f"acc_raw_{i}") if acc_select == "[手动键入全新层级科目]" else acc_select
-            amt = c3.number_input(f"份额金额(元)#{i+1}", min_value=0.0, step=10.0, key=f"amt_{i}")
-            leg_data.append({"direction": direction, "account": acc_final, "amount": amt})
+        with f_tabs[0]:
+            if not ledgers: st.info("云端暂无复式记账明细。")
+            else:
+                df_l = pd.DataFrame(ledgers)
+                df_exp = df_l[df_l["account_to"].str.startswith("Expenses:")]
+                sc1, sc2 = st.columns(2)
+                with sc1:
+                    if not df_exp.empty:
+                        fig_pie_l = px.pie(
+                            df_exp, names="account_to", values="amount", 
+                            hole=0.5, template="plotly_white", title="Exp. 支出类科目占比分析",
+                            color_discrete_sequence=px.colors.qualitative.Pastel
+                        )
+                        fig_pie_l.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color="gray")
+                        st.plotly_chart(fig_pie_l, use_container_width=True)
+                with sc2:
+                    all_tag_stats = {}
+                    for _, row in df_l.iterrows():
+                        raw_tags = str(row["tags"]).replace(",", " ").replace("，", " ").split()
+                        for t in raw_tags:
+                            t = t.strip().lower()
+                            if t: all_tag_stats[t] = all_tag_stats.get(t, 0.0) + row["amount"]
+                    if all_tag_stats:
+                        df_tags = pd.DataFrame(list(all_tag_stats.items()), columns=["自定义标签Tag", "涉及总金额"]).sort_values(by="涉及总金额", ascending=False)
+                        fig_tag_bar = px.bar(
+                            df_tags, x="自定义标签Tag", y="涉及总金额", text_auto='.2s', 
+                            template="plotly_white", title="动态自由标签穿透分析",
+                            color_discrete_sequence=["#1A73E8"]
+                        )
+                        fig_tag_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color="gray", xaxis=dict(showgrid=False))
+                        st.plotly_chart(fig_tag_bar, use_container_width=True)
 
-        st.markdown("---")
-        total_to = sum(item["amount"] for item in leg_data if "去向" in item["direction"])
-        total_from = sum(item["amount"] for item in leg_data if "来源" in item["direction"])
-        balance_gap = round(total_to - total_from, 2)
-        
-        b1, b2, b3 = st.columns(3)
-        b1.metric("资金去向总额 (借/To)", f"¥{total_to:,.2f}")
-        b2.metric("资金来源总额 (贷/From)", f"¥{total_from:,.2f}")
-        if balance_gap == 0: b3.success("✅ 借贷零差额，完美配平")
-        else: b3.error(f"❌ 借贷差额: ¥{balance_gap:,.2f} (锁定提交)")
+        with f_tabs[1]:
+            if ledgers:
+                df_journal = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
+                df_journal.columns = ["交易核算日期", "核心经济事务描述", "资金去处 (贷/From)", "资金归结 (借/To)", "涉及金额 (元)", "流向Tags", "详细备注"]
+                st.dataframe(df_journal, use_container_width=True, hide_index=True)
+
+        with f_tabs[2]:
+            st.subheader("✍️ 录入多科目复式分录（借贷平衡配平锁定）")
+            l_date = st.date_input("1. 设定记账日期", value=datetime.now()).strftime("%Y-%m-%d")
+            l_desc = st.text_input("2. 交易事务/商户描述说明 *", placeholder="如：报销与自费组合购买设备")
+            st.markdown("---")
+            if "legs_count" not in st.session_state: st.session_state.legs_count = 2
             
-        l_tags = st.text_input("4. 贴签 Tags (以空格分隔)", placeholder="reimbursement decoration child")
-        l_comment = st.text_input("5. 记账说明附加备注")
-        
-        if st.button("💾 复合复式流水分拆记账", disabled=(balance_gap != 0 or not l_desc)):
-            success_flag = True
-            to_legs = [x for x in leg_data if "去向" in x["direction"] and x["amount"] > 0]
-            from_legs = [x for x in leg_data if "来源" in x["direction"] and x["amount"] > 0]
-            
-            payload_list = []
-            for t_leg in to_legs:
-                t_acc = t_leg["account"]
-                t_amt = t_leg["amount"]
-                for f_leg in from_legs:
-                    if t_amt <= 0: break
-                    f_acc = f_leg["account"]
-                    f_amt = f_leg["amount"]
-                    if f_amt <= 0: continue
-                    match_amt = min(t_amt, f_amt)
-                    t_amt -= match_amt
-                    f_leg["amount"] -= match_amt
-                    payload_list.append({"tx_date": l_date, "description": l_desc, "account_from": f_acc, "account_to": t_acc, "amount": match_amt, "tags": l_tags.strip(), "comment": l_comment})
+            leg_data = []
+            for i in range(st.session_state.legs_count):
+                c1, c2, c3 = st.columns([3, 4, 2])
+                direction = c1.selectbox(f"交易动向#{i+1}", ["去向 (借/To/支出增加或资产增加)", "来源 (贷/From/资产减少或收入)"], key=f"dir_{i}")
+                acc_select = c2.selectbox(f"选择科目#{i+1}", DYNAMIC_ACCOUNT_LIST + ["[手动键入全新层级科目]"], key=f"acc_sel_{i}")
+                acc_final = c2.text_input(f"✍️ 节点名称#{i+1}", placeholder="如 Expenses:Daily", key=f"acc_raw_{i}") if acc_select == "[手动键入全新层级科目]" else acc_select
+                amt = c3.number_input(f"份额金额(元)#{i+1}", min_value=0.0, step=10.0, key=f"amt_{i}")
+                leg_data.append({"direction": direction, "account": acc_final, "amount": amt})
 
-            for payload in payload_list:
-                res = requests.post(f"{SB_URL}/rest/v1/ledger_entries", headers=HEADERS, json=payload, timeout=5)
-                if res.status_code not in [200, 201]: success_flag = False
-            if success_flag: st.success("🎉 复合多借多贷账目配平成功！"); st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("---")
+            total_to = sum(item["amount"] for item in leg_data if "去向" in item["direction"])
+            total_from = sum(item["amount"] for item in leg_data if "来源" in item["direction"])
+            balance_gap = round(total_to - total_from, 2)
+            
+            b1, b2, b3 = st.columns(3)
+            b1.metric("资金去向总额 (借/To)", f"¥{total_to:,.2f}")
+            b2.metric("资金来源总额 (贷/From)", f"¥{total_from:,.2f}")
+            if balance_gap == 0: b3.success("✅ 借贷零差额，完美配平")
+            else: b3.error(f"❌ 借贷差额: ¥{balance_gap:,.2f} (锁定提交)")
+                
+            l_tags = st.text_input("4. 贴签 Tags (以空格分隔)", placeholder="reimbursement decoration child")
+            l_comment = st.text_input("5. 记账说明附加备注")
+            
+            if st.button("💾 复合复式流水分拆记账", disabled=(balance_gap != 0 or not l_desc)):
+                success_flag = True
+                to_legs = [x for x in leg_data if "去向" in x["direction"] and x["amount"] > 0]
+                from_legs = [x for x in leg_data if "来源" in x["direction"] and x["amount"] > 0]
+                
+                payload_list = []
+                for t_leg in to_legs:
+                    t_acc = t_leg["account"]
+                    t_amt = t_leg["amount"]
+                    for f_leg in from_legs:
+                        if t_amt <= 0: break
+                        f_acc = f_leg["account"]
+                        f_amt = f_leg["amount"]
+                        if f_amt <= 0: continue
+                        match_amt = min(t_amt, f_amt)
+                        t_amt -= match_amt
+                        f_leg["amount"] -= match_amt
+                        payload_list.append({"tx_date": l_date, "description": l_desc, "account_from": f_acc, "account_to": t_acc, "amount": match_amt, "tags": l_tags.strip(), "comment": l_comment})
+
+                for payload in payload_list:
+                    res = requests.post(f"{SB_URL}/rest/v1/ledger_entries", headers=HEADERS, json=payload, timeout=5)
+                    if res.status_code not in [200, 201]: success_flag = False
+                if success_flag: st.success("🎉 复合多借多贷账目配平成功！"); st.rerun()
 
 # ==========================================
 # 8. 页面 5: 库容安全熔断释放与本地备份中枢
@@ -729,48 +661,46 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
 elif menu == "💾 库容安全熔断释放与本地备份中枢":
     st.title("库容安全熔断释放与本地备份中枢")
     
-    st.markdown('<div class="google-card">', unsafe_allow_html=True)
-    st.subheader("📊 财务专项：云端复式财务流水一键导出备份")
-    if ledgers:
-        df_all_ledgers = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
-        csv_all_l = make_csv_buffer(df_all_ledgers)
-        if csv_all_l: st.download_button(label=f"📥 导出财务账目明细卷 (共 {len(df_all_ledgers)} 笔分录).csv", data=csv_all_l, file_name="ledger_entries_all.csv", mime="text/csv")
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        st.subheader("📊 财务专项：云端复式财务流水一键导出备份")
+        if ledgers:
+            df_all_ledgers = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
+            csv_all_l = make_csv_buffer(df_all_ledgers)
+            if csv_all_l: st.download_button(label=f"📥 导出财务账目明细卷 (共 {len(df_all_ledgers)} 笔分录).csv", data=csv_all_l, file_name="ledger_entries_all.csv", mime="text/csv")
         
     st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="google-card">', unsafe_allow_html=True)
-    st.subheader("📅 历史陈年销售数据归档与熔断粉碎")
-    export_year = st.selectbox("请选择要归档归集的目标业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
+    with st.container(border=True):
+        st.subheader("📅 历史陈年销售数据归档与熔断粉碎")
+        export_year = st.selectbox("请选择要归档归集的目标业务年份：", list(range(system_current_year-3, system_current_year+2)), index=3)
 
-    p_exported = [{"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]} for p in projects.values() if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year]
-    o_exported = [{"id": o["id"], "project_ref": o["p_ref"], "order_date": o["date"], "province": o["province"], "client": o["client"], "product": o["product"], "price_no_tax": o["price_no_tax"], "tax_rate": o["tax_rate"], "quantity": o["quantity"], "amt_no_tax": o["amt_no_tax"], "amt_with_tax": o["amt_with_tax"], "order_p_name": o["order_p_name"]} for o in orders.values() if datetime.strptime(o["date"], "%Y-%m-%d").year == export_year]
-    c_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "collection_date": row["date"], "invoice_no": row["invoice_no"]} for row in collections if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
-    r_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "revenue_date": row["date"]} for row in revenues if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
+        p_exported = [{"id": p["id"], "name": p["name"], "client": p["client"], "target": p["target"], "stage": p["stage"], "bid_date": p["bid_date"]} for p in projects.values() if datetime.strptime(p["bid_date"], "%Y-%m-%d").year == export_year]
+        o_exported = [{"id": o["id"], "project_ref": o["p_ref"], "order_date": o["date"], "province": o["province"], "client": o["client"], "product": o["product"], "price_no_tax": o["price_no_tax"], "tax_rate": o["tax_rate"], "quantity": o["quantity"], "amt_no_tax": o["amt_no_tax"], "amt_with_tax": o["amt_with_tax"], "order_p_name": o["order_p_name"]} for o in orders.values() if datetime.strptime(o["date"], "%Y-%m-%d").year == export_year]
+        c_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "collection_date": row["date"], "invoice_no": row["invoice_no"]} for row in collections if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
+        r_exported = [{"order_ref": row["o_ref"], "amount": row["amount"], "revenue_date": row["date"]} for row in revenues if datetime.strptime(row["date"], "%Y-%m-%d").year == export_year]
 
-    dl_col1, dl_col2, dl_col3, dl_col4 = st.columns(4)
-    with dl_col1:
-        csv_p = make_csv_buffer(pd.DataFrame(p_exported))
-        if csv_p: st.download_button(f"📥 框架协议 projects_{export_year}.csv", csv_p, f"projects_{export_year}.csv", "text/csv")
-    with dl_col2:
-        csv_o = make_csv_buffer(pd.DataFrame(o_exported))
-        if csv_o: st.download_button(f"📥 中标订单 orders_{export_year}.csv", csv_o, f"orders_{export_year}.csv", "text/csv")
-    with dl_col3:
-        csv_c = make_csv_buffer(pd.DataFrame(c_exported))
-        if csv_c: st.download_button(f"📥 资金回款 collections_{export_year}.csv", csv_c, f"collections_{export_year}.csv", "text/csv")
-    with dl_col4:
-        csv_r = make_csv_buffer(pd.DataFrame(r_exported))
-        if csv_r: st.download_button(f"📥 签收确收 revenues_{export_year}.csv", csv_r, f"revenues_{export_year}.csv", "text/csv")
+        dl_col1, dl_col2, dl_col3, dl_col4 = st.columns(4)
+        with dl_col1:
+            csv_p = make_csv_buffer(pd.DataFrame(p_exported))
+            if csv_p: st.download_button(f"📥 框架协议 projects_{export_year}.csv", csv_p, f"projects_{export_year}.csv", "text/csv")
+        with dl_col2:
+            csv_o = make_csv_buffer(pd.DataFrame(o_exported))
+            if csv_o: st.download_button(f"📥 中标订单 orders_{export_year}.csv", csv_o, f"orders_{export_year}.csv", "text/csv")
+        with dl_col3:
+            csv_c = make_csv_buffer(pd.DataFrame(c_exported))
+            if csv_c: st.download_button(f"📥 资金回款 collections_{export_year}.csv", csv_c, f"collections_{export_year}.csv", "text/csv")
+        with dl_col4:
+            csv_r = make_csv_buffer(pd.DataFrame(r_exported))
+            if csv_r: st.download_button(f"📥 签收确收 revenues_{export_year}.csv", csv_r, f"revenues_{export_year}.csv", "text/csv")
 
-    st.markdown("---")
-    if export_year >= system_current_year:
-        st.error(f"🔒 **大盘控制安全断路器阻断**：当前活跃年度数据禁止物理清空！")
-    else:
-        st.warning(f"⚠️ 允许操作往年历史数据归档清空。")
-        confirm_downloaded = st.checkbox(f"🔴 我确认：往年历史数据已导出离线转存备份，请求从 Supabase 云数据库完全清空库容以释放空间。")
-        if confirm_downloaded and st.button(f"🗑️ 彻底物理粉碎云端 {export_year} 年往期历史业务流水", type="primary"):
-            requests.delete(f"{SB_URL}/rest/v1/projects?bid_date=gte.{export_year}-01-01&bid_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-            requests.delete(f"{SB_URL}/rest/v1/orders?order_date=gte.{export_year}-01-01&order_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-            requests.delete(f"{SB_URL}/rest/v1/collections?collection_date=gte.{export_year}-01-01&collection_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-            requests.delete(f"{SB_URL}/rest/v1/revenues?revenue_date=gte.{export_year}-01-01&revenue_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
-            st.success("云端历史库容安全熔断释放完毕！"); st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("---")
+        if export_year >= system_current_year:
+            st.error(f"🔒 **大盘控制安全断路器阻断**：当前活跃年度数据禁止物理清空！")
+        else:
+            st.warning(f"⚠️ 允许操作往年历史数据归档清空。")
+            confirm_downloaded = st.checkbox(f"🔴 我确认：往年历史数据已导出离线转存备份，请求从 Supabase 云数据库完全清空库容以释放空间。")
+            if confirm_downloaded and st.button(f"🗑️ 彻底物理粉碎云端 {export_year} 年往期历史业务流水", type="primary"):
+                requests.delete(f"{SB_URL}/rest/v1/projects?bid_date=gte.{export_year}-01-01&bid_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                requests.delete(f"{SB_URL}/rest/v1/orders?order_date=gte.{export_year}-01-01&order_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                requests.delete(f"{SB_URL}/rest/v1/collections?collection_date=gte.{export_year}-01-01&collection_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                requests.delete(f"{SB_URL}/rest/v1/revenues?revenue_date=gte.{export_year}-01-01&revenue_date=lte.{export_year}-12-31", headers=HEADERS, timeout=5)
+                st.success("云端历史库容安全熔断释放完毕！"); st.rerun()
