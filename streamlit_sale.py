@@ -7,24 +7,23 @@ import requests
 import io
 
 # ==========================================
-# 🎨 1. 全自适应、高对比度 Google Material 风格主题 CSS
+# 🎨 1. 全自适应、超高对比度 Google Material 风格主题 CSS
 # ==========================================
 st.set_page_config(page_title="通信销售与复式财务全能云工作台", layout="wide", page_icon="📈")
 
-# 采用自适应 CSS 变量，确保 Light/Dark 模式下均 100% 完美渲染
+# 采用自适应 CSS 变量，确保 Light/Dark 模式下均 100% 完美、高对比度地渲染
 st.markdown("""
 <style>
-    /* 1. 适配官方容器颜色，防止文字被硬编码背景色遮挡 */
+    /* 1. 基础全局定义 */
     .stApp {
         font-family: "Roboto", "Segoe UI", Arial, sans-serif !important;
     }
 
-    /* === 2. 左侧自适应侧边栏 (Sidebar) 强化 === */
+    /* === 2. 左侧自适应侧边栏 (Sidebar) === */
     [data-testid="stSidebar"] {
         border-right: 1px solid var(--border-color) !important;
     }
     
-    /* 强力锁定侧边栏导航单选框在所有主题下的对比度 */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {
         gap: 8px !important;
         padding-top: 10px !important;
@@ -41,7 +40,6 @@ st.markdown("""
         border: none !important;
         color: var(--text-color) !important;
     }
-    /* 悬浮与选中状态适配 */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
         background-color: var(--hover-color, rgba(0,0,0,0.05)) !important;
     }
@@ -54,7 +52,7 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* === 3. 右侧主界面 (Main Content) 样式提炼 === */
+    /* === 3. 右侧主界面 (Main Content) 样式 === */
     .main .block-container h1 {
         font-weight: 700 !important;
         letter-spacing: -0.03em !important;
@@ -87,7 +85,7 @@ st.markdown("""
         font-weight: 500 !important;
     }
 
-    /* Google 经典标准圆角按钮 */
+    /* Google 圆角标准按钮 */
     .stButton>button {
         background-color: #1A73E8 !important;
         color: #FFFFFF !important;
@@ -116,11 +114,24 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* 数据表格自适应美化 */
-    [data-testid="stDataTable"] {
-        border: 1px solid var(--border-color) !important;
+    /* === ⚡ 终极表格清晰度修复方案 ⚡ === */
+    /* 1. 强制表格容器边框和背景清晰化 */
+    div[data-testid="stDataFrame"] {
+        border: 1.5px solid var(--border-color) !important;
         border-radius: 8px !important;
-        overflow: hidden !important;
+        background-color: var(--background-color) !important;
+        padding: 2px !important;
+    }
+    /* 2. 暴力解除表格内文本的半透明灰色状态，强制 100% 显色 */
+    div[data-testid="stDataFrame"] * {
+        color: var(--text-color) !important;
+        opacity: 1.0 !important; /* 强制不透明，解决发灰模糊 */
+        font-weight: 500 !important; /* 增加字体字重，让字符更粗更锐利 */
+    }
+    /* 3. 增强表头部分的独立视觉质感 */
+    div[data-testid="stDataFrame"] th {
+        background-color: var(--secondary-background-color) !important;
+        font-weight: 700 !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -250,7 +261,7 @@ for l in ledgers:
 DYNAMIC_ACCOUNT_LIST = sorted(list(dynamic_accounts))
 
 # ==========================================
-# 3. 🗺️ 左侧导航大气命名
+# 3. 🗺️ 左侧导航大气命名[cite: 1]
 # ==========================================
 menu_options = [
     "📊 集团核心业绩与双轨 KPI 战略大屏", 
@@ -280,7 +291,6 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
 
     st.markdown(f"### 🎯 {current_year} 年度双轨 KPI 实时观测中枢")
     
-    # 自适应自建卡片：避免硬编码背景色导致暗黑模式异常，直接利用 CSS 变量
     def render_kpi_card(title, value, sub_text="", border_color="#1A73E8"):
         return f"""
         <div class="google-adaptive-card" style="border-left: 5px solid {border_color} !important;">
@@ -290,7 +300,7 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
         </div>
         """
     
-    # 修复图2：将4个指标拆成2列x2排，彻底杜绝换行，使数据大小和高度高度对称一致！
+    # 2x2 指标布局（确保卡片大小对称一致，完美防换行）
     st.markdown("#### 💸 确认收入 KPI 数据链")
     row1_col1, row1_col2 = st.columns(2)
     with row1_col1:
@@ -314,7 +324,7 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
     
     st.markdown("---")
     
-    # 历史演进模块（利用 st.container 替代 Markdown，彻底杀灭空白长白框！）
+    # 历史演进模块
     st.markdown('<h3>🗂️ 跨断代全景历史业绩演进脉络</h3>', unsafe_allow_html=True)
     with st.container(border=True):
         history_list = []
@@ -333,7 +343,6 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
                 template="plotly_white",
                 color_discrete_sequence=["#1A73E8", "#9AA0A6"]
             )
-            # 全自适应底色，彻底无缝配合 Light/Dark 模式
             fig_history.update_layout(
                 plot_bgcolor='rgba(0,0,0,0)', 
                 paper_bgcolor='rgba(0,0,0,0)', 
@@ -350,7 +359,7 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
 elif menu == "📝 通信业务拉通一体化智能流水台账":
     st.title("通信业务拉通一体化智能流水台账")
     
-    # 修复图1：使用原生的 st.container(border=True) 取代 markdown card，彻底杜绝拉垮的空框！
+    # 容器化包裹，消除空卡片
     with st.container(border=True):
         f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
         unique_projects = ["全部项目"] + sorted(list(set(p["name"] for p in projects.values())))
@@ -371,8 +380,8 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
         project_rows.append({"项目框架名称": p["name"], "客户简称": p["client"], "框架标的总额": p["target"], "已下订单含税总额": p["amt_with_tax_total"], "额度消耗比例": f"{ratio*100:.1f}%", "安全预警": warning_status, "创建日期": p["bid_date"], "当前状态": p["stage"]})
     if project_rows:
         df_p_view = pd.DataFrame(project_rows)
-        # 用高对比度自适应色彩美化预警，无论明暗均清晰可见
-        st.dataframe(df_p_view.style.map(lambda v: "background-color: rgba(197, 34, 31, 0.15); color: #FF5252; font-weight: bold;" if "🚨" in str(v) else ("background-color: rgba(176, 96, 0, 0.15); color: #FFD740; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
+        # 优化预警单元格样式，在所有主题下均保持高清晰高反差
+        st.dataframe(df_p_view.style.map(lambda v: "background-color: rgba(197, 34, 31, 0.18); color: #FF5252; font-weight: bold;" if "🚨" in str(v) else ("background-color: rgba(176, 96, 0, 0.18); color: #FFD740; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("🤝 中标订单及【确收/回款】生命周期流水")
@@ -389,11 +398,32 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
             
         uncollected = max(0.0, o["amt_with_tax"] - o["collect_total"])
         unrevenue = max(0.0, o["amt_with_tax"] - o["revenue_total"]) 
-        order_rows.append({"订单编号": o["raw_id"], "区域省份": o["province"], "客户简称": o["client"], "订购产品明细": o["product"], "接单含税金额": o["amt_with_tax"], "累计已确收收入": o["revenue_total"], "⏳ 尚未签收": unrevenue, "累计已回款": o["collect_total"], "待追收尾款": uncollected})
+        order_rows.append({
+            "订单编号": o["raw_id"], 
+            "区域省份": o["province"], 
+            "客户简称": o["client"], 
+            "订购产品明细": o["product"], 
+            "接单含税金额": o["amt_with_tax"], 
+            "累计已确收收入": o["revenue_total"], 
+            "⏳ 尚未签收": unrevenue, 
+            "累计已回款": o["collect_total"], 
+            "待追收尾款": uncollected
+        })
         
     if order_rows:
         df_o_view = pd.DataFrame(order_rows)
-        st.dataframe(df_o_view, use_container_width=True, hide_index=True)
+        
+        # 格式化数据，使金额带有千分位逗号，且强制所有数值保持小数点后两位，更显商业专业质感
+        formatted_df = df_o_view.style.format({
+            "接单含税金额": "¥{:,.2f}",
+            "累计已确收收入": "¥{:,.2f}",
+            "⏳ 尚未签收": "¥{:,.2f}",
+            "累计已回款": "¥{:,.2f}",
+            "待追收尾款": "¥{:,.2f}"
+        })
+        
+        # 在此处输出表格，其渲染会通过 CSS 规则 [data-testid="stDataFrame"] 强制锁定极致高清晰度
+        st.dataframe(formatted_df, use_container_width=True, hide_index=True)
 
 # ==========================================
 # 6. 页面 3: 核心业务数据全生命周期控制中心
@@ -401,7 +431,6 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
 elif menu == "➕ 核心业务数据全生命周期控制中心":
     st.title("核心业务数据全生命周期控制中心")
     
-    # 使用 container 包裹，消除乱飞的 HTML 白卡片
     op_type = st.radio("请选择维护操作类型：", ["🆕 录入全新数据", "⚙️ 修改已有信息"], horizontal=True)
     st.markdown("---")
 
@@ -599,7 +628,10 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
             if ledgers:
                 df_journal = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
                 df_journal.columns = ["交易核算日期", "核心经济事务描述", "资金去处 (贷/From)", "资金归结 (借/To)", "涉及金额 (元)", "流向Tags", "详细备注"]
-                st.dataframe(df_journal, use_container_width=True, hide_index=True)
+                
+                # 财务明细账本格式化（千分位）
+                formatted_journal = df_journal.style.format({"涉及金额 (元)": "¥{:,.2f}"})
+                st.dataframe(formatted_journal, use_container_width=True, hide_index=True)
 
         with f_tabs[2]:
             st.subheader("✍️ 录入多科目复式分录（借贷平衡配平锁定）")
