@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -114,24 +113,32 @@ st.markdown("""
         font-weight: 600 !important;
     }
 
-    /* === ⚡ 终极表格清晰度修复方案 ⚡ === */
-    /* 1. 强制表格容器边框和背景清晰化 */
-    div[data-testid="stDataFrame"] {
+    /* === ⚡ 终极表格高反差、极致清晰度修复 CSS (地毯式覆盖) ⚡ === */
+    /* 1. 强制主页面所有数据表格容器的高对比度黑色边框与自适应背景 */
+    div[data-testid="stDataFrame"], 
+    .stDataFrame,
+    [data-testid="stTable"] {
         border: 1.5px solid var(--border-color) !important;
         border-radius: 8px !important;
         background-color: var(--background-color) !important;
-        padding: 2px !important;
     }
-    /* 2. 暴力解除表格内文本的半透明灰色状态，强制 100% 显色 */
-    div[data-testid="stDataFrame"] * {
+
+    /* 2. 彻底剥离任何可能导致文本发灰、半透明的 CSS 属性，锁定 100% 不透明 */
+    div[data-testid="stDataFrame"] *, 
+    .stDataFrame *,
+    [data-testid="stTable"] * {
         color: var(--text-color) !important;
-        opacity: 1.0 !important; /* 强制不透明，解决发灰模糊 */
-        font-weight: 500 !important; /* 增加字体字重，让字符更粗更锐利 */
+        opacity: 1.0 !important;         /* 强制不透明，清除模糊感 */
+        font-weight: 600 !important;       /* 提升字重，使数字和中文笔画更锐利 */
+        text-shadow: none !important;      /* 移除可能导致发虚的阴影 */
     }
-    /* 3. 增强表头部分的独立视觉质感 */
-    div[data-testid="stDataFrame"] th {
+
+    /* 3. 表头强化：确保表格的头部背景色稍深，并加粗显示，清晰断代 */
+    div[data-testid="stDataFrame"] th,
+    .stDataFrame th {
         background-color: var(--secondary-background-color) !important;
         font-weight: 700 !important;
+        border-bottom: 2px solid var(--border-color) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -261,7 +268,7 @@ for l in ledgers:
 DYNAMIC_ACCOUNT_LIST = sorted(list(dynamic_accounts))
 
 # ==========================================
-# 3. 🗺️ 左侧导航大气命名[cite: 1]
+# 3. 🗺  左侧导航大气命名[cite: 1]
 # ==========================================
 menu_options = [
     "📊 集团核心业绩与双轨 KPI 战略大屏", 
@@ -381,7 +388,7 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
     if project_rows:
         df_p_view = pd.DataFrame(project_rows)
         # 优化预警单元格样式，在所有主题下均保持高清晰高反差
-        st.dataframe(df_p_view.style.map(lambda v: "background-color: rgba(197, 34, 31, 0.18); color: #FF5252; font-weight: bold;" if "🚨" in str(v) else ("background-color: rgba(176, 96, 0, 0.18); color: #FFD740; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
+        st.dataframe(df_p_view.style.map(lambda v: "background-color: rgba(197, 34, 31, 0.15); color: #FF5252; font-weight: bold;" if "🚨" in str(v) else ("background-color: rgba(176, 96, 0, 0.15); color: #FFD740; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader("🤝 中标订单及【确收/回款】生命周期流水")
@@ -413,17 +420,13 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
     if order_rows:
         df_o_view = pd.DataFrame(order_rows)
         
-        # 格式化数据，使金额带有千分位逗号，且强制所有数值保持小数点后两位，更显商业专业质感
-        formatted_df = df_o_view.style.format({
-            "接单含税金额": "¥{:,.2f}",
-            "累计已确收收入": "¥{:,.2f}",
-            "⏳ 尚未签收": "¥{:,.2f}",
-            "累计已回款": "¥{:,.2f}",
-            "待追收尾款": "¥{:,.2f}"
-        })
+        # 💡 核心修复：在这里直接对 DataFrame 的数据列进行千分位和货币符号格式化，转换为 String。
+        # 彻底摆脱 Pandas Styler 机制，防止其生成的 HTML 破坏我们写的高对比度 CSS 渲染！
+        for col in ["接单含税金额", "累计已确收收入", "⏳ 尚未签收", "累计已回款", "待追收尾款"]:
+            df_o_view[col] = df_o_view[col].map(lambda x: f"¥{x:,.2f}")
         
-        # 在此处输出表格，其渲染会通过 CSS 规则 [data-testid="stDataFrame"] 强制锁定极致高清晰度
-        st.dataframe(formatted_df, use_container_width=True, hide_index=True)
+        # 直接输出高对比度绑定的原生 DataFrame，字迹极其清晰锐利！
+        st.dataframe(df_o_view, use_container_width=True, hide_index=True)
 
 # ==========================================
 # 6. 页面 3: 核心业务数据全生命周期控制中心
@@ -629,9 +632,9 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
                 df_journal = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
                 df_journal.columns = ["交易核算日期", "核心经济事务描述", "资金去处 (贷/From)", "资金归结 (借/To)", "涉及金额 (元)", "流向Tags", "详细备注"]
                 
-                # 财务明细账本格式化（千分位）
-                formatted_journal = df_journal.style.format({"涉及金额 (元)": "¥{:,.2f}"})
-                st.dataframe(formatted_journal, use_container_width=True, hide_index=True)
+                # 直接转换数字列，摒弃 Styler
+                df_journal["涉及金额 (元)"] = df_journal["涉及金额 (元)"].map(lambda x: f"¥{x:,.2f}")
+                st.dataframe(df_journal, use_container_width=True, hide_index=True)
 
         with f_tabs[2]:
             st.subheader("✍️ 录入多科目复式分录（借贷平衡配平锁定）")
