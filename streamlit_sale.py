@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -6,54 +7,58 @@ import requests
 import io
 
 # ==========================================
-# 🎨 1. 全量视觉重构：YouTube/X 极高对比度扁平化科技主题 CSS
+# 🎨 1. 全量视觉重构：YouTube/X 极高对比度、物理隔离 CSS
 # ==========================================
 st.set_page_config(page_title="通信销售与复式财务全能云工作台", layout="wide", page_icon="📈")
 
 # 核心现代配色方案
 X_PRIMARY = "#1D9BF0"      # X 科技蓝
-X_BG_MAIN = "#F7F9F9"      # 极简钛白背景
-X_BG_SIDEBAR = "#0F1419"   # 极夜黑侧边栏
+X_BG_MAIN = "#F8FAFC"      # 极简浅灰白背景（右侧）
+X_BG_SIDEBAR = "#0F1419"   # 极夜黑侧边栏（左侧）
 X_TXT_DARK = "#0F1419"     # 主界面深空黑字
 X_TXT_LIGHT = "#FFFFFF"    # 侧边栏纯白字
 X_TXT_MUTED = "#536471"    # 现代哑光灰
 
 st.markdown(f"""
 <style>
-    /* 全局背景及字体定义 */
+    /* 1. 全局背景及字体定义 */
     .stApp {{
         background-color: {X_BG_MAIN} !important;
         color: {X_TXT_DARK} !important;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }}
 
-    /* === 左侧暗黑科技侧边栏 (Sidebar) 全量重构 === */
+    /* === 2. 左侧暗黑科技侧边栏 (Sidebar) 严格作用域 === */
     [data-testid="stSidebar"] {{
         background-color: {X_BG_SIDEBAR} !important;
         border-right: 1px solid #2F3336 !important;
+        color: {X_TXT_LIGHT} !important;
     }}
     
-    /* 强制侧边栏中的各种表单组件标签、文本变为高对比度白色 */
+    /* 仅在侧边栏生效的文字颜色强制白色，防止污染右侧主界面 */
     [data-testid="stSidebar"] .stText, 
     [data-testid="stSidebar"] label, 
     [data-testid="stSidebar"] .stMarkdown p,
-    [data-testid="stSidebar"] .stRadio label {{
+    [data-testid="stSidebar"] span {{
         color: {X_TXT_LIGHT} !important;
         font-weight: 600 !important;
     }}
     
-    /* 侧边栏标题及展开折叠器 header */
-    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {{
+    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] h3 {{
         color: {X_TXT_LIGHT} !important;
         font-weight: 800 !important;
     }}
+
+    /* 侧边栏折叠面板美化 */
     [data-testid="stSidebar"] .stExpander {{
         background-color: #1E2732 !important;
         border: 1px solid #38444D !important;
         border-radius: 12px !important;
     }}
 
-    /* 侧边栏单选导航项美化：完全像素级致敬 X 导航按钮 */
+    /* 侧边栏导航单选框美化 (X 极简胶囊按钮) */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {{
         gap: 12px !important;
         padding-top: 15px !important;
@@ -61,7 +66,7 @@ st.markdown(f"""
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
         background-color: transparent !important;
         border-radius: 9999px !important;
-        padding: 12px 24px !important;
+        padding: 12px 20px !important;
         margin: 0 !important;
         transition: all 0.2s ease-in-out;
         width: 100%;
@@ -72,7 +77,7 @@ st.markdown(f"""
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
         background-color: rgba(255, 255, 255, 0.08) !important;
     }}
-    /* 被选中时的极高对比度蓝色光标状态 */
+    /* 被选中时的蓝色高亮框 */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] {{
         background-color: rgba(29, 155, 240, 0.15) !important;
         border: 1px solid {X_PRIMARY} !important;
@@ -82,20 +87,39 @@ st.markdown(f"""
         font-weight: 800 !important;
     }}
 
-    /* === 右侧主界面 (Main Content) 卡片与排版重构 === */
-    h1 {{ 
-        color: {X_TXT_DARK} !important; 
-        font-weight: 800 !important; 
-        letter-spacing: -0.04em !important; 
-        margin-bottom: 1.5rem !important; 
-    }}
-    h2, h3, h4 {{ 
-        color: {X_TXT_DARK} !important; 
-        font-weight: 700 !important; 
-        margin-top: 1.5rem !important; 
+    /* === 3. 右侧主界面 (Main Content) 严格隔离保护 === */
+    /* 强制右侧主页面内所有表单标签、普通文本为高对比度深色，彻底解决看不清的问题 */
+    .main .block-container label,
+    .main .block-container .stText,
+    .main .block-container .stMarkdown p,
+    .main .block-container span,
+    .main .block-container div[data-testid="stWidgetLabel"] p {{
+        color: {X_TXT_DARK} !important;
+        font-weight: 600 !important;
     }}
 
-    /* YouTube 风格的独立悬浮白卡片 */
+    /* 大气、清晰的主标题和副标题 */
+    .main .block-container h1 {{
+        color: {X_TXT_DARK} !important;
+        font-weight: 800 !important;
+        letter-spacing: -0.04em !important;
+        margin-bottom: 1.5rem !important;
+    }}
+    .main .block-container h2, 
+    .main .block-container h3, 
+    .main .block-container h4 {{
+        color: {X_TXT_DARK} !important;
+        font-weight: 700 !important;
+        margin-top: 1.5rem !important;
+    }}
+
+    /* 主界面单选框（维护操作类型、业务阶段）的高对比度黑色文字修复 */
+    .main .block-container .stRadio div[role="radiogroup"] label p {{
+        color: {X_TXT_DARK} !important;
+        font-weight: 600 !important;
+    }}
+
+    /* YouTube 风格的独立悬浮白色卡片容器 */
     .dashboard-card {{
         background-color: #FFFFFF !important;
         padding: 24px !important;
@@ -110,8 +134,11 @@ st.markdown(f"""
         box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06) !important;
     }}
 
-    /* 表单输入框、选择框现代扁平化设计 */
-    .stTextInput>div>div>input, .stNumberInput>div>div>input, .stSelectbox>div>div>div, .stDateInput>div>div>input {{
+    /* 主页面表单输入框、选择框现代扁平化设计 */
+    .main .block-container .stTextInput>div>div>input, 
+    .main .block-container .stNumberInput>div>div>input, 
+    .main .block-container .stSelectbox>div>div>div, 
+    .main .block-container .stDateInput>div>div>input {{
         background-color: #FFFFFF !important;
         color: {X_TXT_DARK} !important;
         border: 1.5px solid #CFD9DE !important;
@@ -119,7 +146,8 @@ st.markdown(f"""
         font-weight: 500 !important;
         padding: 10px 14px !important;
     }}
-    .stTextInput>div>div>input:focus, .stNumberInput>div>div>input:focus {{
+    .main .block-container .stTextInput>div>div>input:focus, 
+    .main .block-container .stNumberInput>div>div>input:focus {{
         border-color: {X_PRIMARY} !important;
         box-shadow: 0 0 0 3px rgba(29, 155, 240, 0.15) !important;
     }}
@@ -133,7 +161,6 @@ st.markdown(f"""
         font-weight: 700 !important;
         font-size: 15px !important;
         padding: 12px 32px !important;
-        width: auto !important;
         transition: background-color 0.2s;
     }}
     .stButton>button:hover {{
@@ -328,7 +355,7 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
 
     st.markdown(f"### 🎯 {current_year} 年度双轨 KPI 实时观测中枢")
     
-    # --- KPI 卡片渲染器 (优雅卡片，带有顶部炫彩边条) ---
+    # --- KPI 卡片渲染器 (带有顶部炫彩边条的卡片) ---
     def render_kpi_card(title, value, sub_text="", accent_color="#E1E8ED", value_color="#0F1419"):
         return f"""
         <div class="dashboard-card" style="border-top: 6px solid {accent_color};">
@@ -339,9 +366,9 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
         """
         
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-    m_col1.markdown(render_kpi_card(f"{current_year}年度确收指标", f"¥{cfg_rev:,.2f}", "年度硬性指标", "#CFD9DE"), unsafe_allow_html=True)
+    m_col1.markdown(render_kpi_card(f"{current_year}年度确收指标", f"¥{cfg_rev:,.2f}", "年度确收考核线", "#CFD9DE"), unsafe_allow_html=True)
     m_col2.markdown(render_kpi_card("大盘当前已确收", f"¥{annual_revenue_done:,.2f}", f"🎯 达成率 {rev_annual_rate*100:.1f}%", X_PRIMARY, "#0F1419"), unsafe_allow_html=True)
-    m_col3.markdown(render_kpi_card(f"{current_year}年度回款目标", f"¥{cfg_col:,.2f}", "年度资金链红线", "#CFD9DE"), unsafe_allow_html=True)
+    m_col3.markdown(render_kpi_card(f"{current_year}年度回款目标", f"¥{cfg_col:,.2f}", "年度到账红线", "#CFD9DE"), unsafe_allow_html=True)
     m_col4.markdown(render_kpi_card("大盘累计资金进账", f"¥{annual_collection_done:,.2f}", f"⚡ 达成率 {col_annual_rate*100:.1f}%", "#7856FF", "#0F1419"), unsafe_allow_html=True)
     
     # 推进进度条
@@ -515,7 +542,7 @@ elif menu == "➕ 核心业务数据全生命周期控制中心":
                     if not orders: st.warning("⚠️ 系统内暂无订单。"); st.form_submit_button("不可提交", disabled=True); raw_oid_input = ""
                     else:
                         o_opts = {f"订单:{o['raw_id']} (剩余尾款:¥{o['amt_with_tax'] - o['collect_total']:.2f})": oid for oid, o in orders.items()}
-                        selected_order_labels = st.multiselect("1. 选择本次合并核销的多个订单明细分项*", list(o_opts.keys()))
+                        selected_order_labels = st.multiselect("1. 选择本次合并核销的多个订单分项*", list(o_opts.keys()))
                         raw_oid_input = ",".join([o_opts[lbl] for lbl in selected_order_labels])
                 else: raw_oid_input = st.text_input("1. 手动输入历史客户订单号 *")
 
@@ -627,7 +654,7 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
                     df_tags = pd.DataFrame(list(all_tag_stats.items()), columns=["自定义标签Tag", "涉及总金额"]).sort_values(by="涉及总金额", ascending=False)
                     fig_tag_bar = px.bar(
                         df_tags, x="自定义标签Tag", y="涉及总金额", text_auto='.2s', 
-                        template="plotly_white", title="动态自由标签穿透穿深分析",
+                        template="plotly_white", title="动态自由标签穿透分析",
                         color_discrete_sequence=[X_PRIMARY]
                     )
                     fig_tag_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)', font_color=X_TXT_MUTED, xaxis=dict(showgrid=False))
