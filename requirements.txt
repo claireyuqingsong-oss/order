@@ -1,6 +1,4 @@
 streamlit>=1.30.0,<1.40.0
-starlette>=0.27.0,<0.38.0
 pandas>=2.0.0
 plotly>=5.0.0
 requests>=2.28.0
-pillow>=10.0.0
