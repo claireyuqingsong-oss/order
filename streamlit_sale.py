@@ -6,25 +6,28 @@ import requests
 import io
 
 # ==========================================
-# 🎨 1. 全自适应、超高对比度 Google Material 风格主题 CSS
+# 🎨 1. 极简全自适应 Google Material 风格主题 CSS
 # ==========================================
-st.set_page_config(page_title="通信销售与复式财务全能云工作台", layout="wide", page_icon="📈")
+st.set_page_config(
+    page_title="通信销售与复式财务全能云工作台", 
+    layout="wide", 
+    page_icon="📈"
+)
 
-# 采用自适应 CSS 变量，确保 Light/Dark 模式下均 100% 完美、高对比度地渲染
 st.markdown("""
 <style>
-    /* 1. 基础全局定义 */
+    /* 全局基础定义 */
     .stApp {
-        font-family: "Roboto", "Segoe UI", Arial, sans-serif !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     }
 
-    /* === 2. 左侧自适应侧边栏 (Sidebar) === */
+    /* 左侧侧边栏美化 */
     [data-testid="stSidebar"] {
         border-right: 1px solid var(--border-color) !important;
     }
     
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] {
-        gap: 8px !important;
+        gap: 6px !important;
         padding-top: 10px !important;
     }
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
@@ -39,9 +42,6 @@ st.markdown("""
         border: none !important;
         color: var(--text-color) !important;
     }
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
-        background-color: var(--hover-color, rgba(0,0,0,0.05)) !important;
-    }
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] {
         background-color: rgba(26, 115, 232, 0.15) !important;
         border: 1px solid #1A73E8 !important;
@@ -51,7 +51,7 @@ st.markdown("""
         font-weight: 700 !important;
     }
 
-    /* === 3. 右侧主界面 (Main Content) 样式 === */
+    /* 右侧主界面标题 */
     .main .block-container h1 {
         font-weight: 700 !important;
         letter-spacing: -0.03em !important;
@@ -60,15 +60,8 @@ st.markdown("""
         padding-bottom: 12px;
         color: var(--text-color) !important;
     }
-    .main .block-container h2, 
-    .main .block-container h3, 
-    .main .block-container h4 {
-        color: var(--text-color) !important;
-        font-weight: 600 !important;
-        margin-top: 1.5rem !important;
-    }
 
-    /* Google 扁平自适应卡片 */
+    /* Google 风格自适应卡片 */
     .google-adaptive-card {
         background-color: var(--background-color) !important;
         padding: 20px !important;
@@ -78,43 +71,7 @@ st.markdown("""
         box-shadow: 0 1px 2px 0 rgba(60,64,67,0.1) !important;
     }
 
-    /* 保证单选框标签文本主题自适应 */
-    .main .block-container .stRadio div[role="radiogroup"] label p {
-        color: var(--text-color) !important;
-        font-weight: 500 !important;
-    }
-
-    /* Google 圆角标准按钮 */
-    .stButton>button {
-        background-color: #1A73E8 !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 4px !important;
-        font-weight: 600 !important;
-        font-size: 14px !important;
-        padding: 10px 24px !important;
-        transition: background-color 0.15s, box-shadow 0.15s;
-        box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3) !important;
-    }
-    .stButton>button:hover {
-        background-color: #1557B0 !important;
-        box-shadow: 0 2px 6px 0 rgba(60,64,67,0.3) !important;
-    }
-
-    /* 选项卡 Tabs 美化 */
-    button[data-baseweb="tab"] {
-        font-size: 15px !important;
-        font-weight: 500 !important;
-        border-bottom-width: 3px !important;
-    }
-    button[data-baseweb="tab"][aria-selected="true"] {
-        color: #1A73E8 !important;
-        border-bottom-color: #1A73E8 !important;
-        font-weight: 600 !important;
-    }
-
-    /* === ⚡ 终极表格高反差、极致清晰度修复 CSS (地毯式覆盖) ⚡ === */
-    /* 1. 强制主页面所有数据表格容器的高对比度黑色边框与自适应背景 */
+    /* 高对比度清晰表格 CSS */
     div[data-testid="stDataFrame"], 
     .stDataFrame,
     [data-testid="stTable"] {
@@ -123,17 +80,16 @@ st.markdown("""
         background-color: var(--background-color) !important;
     }
 
-    /* 2. 彻底剥离任何可能导致文本发灰、半透明的 CSS 属性，锁定 100% 不透明 */
+    /* 强制表格文字清晰且不透明 */
     div[data-testid="stDataFrame"] *, 
     .stDataFrame *,
     [data-testid="stTable"] * {
         color: var(--text-color) !important;
-        opacity: 1.0 !important;         /* 强制不透明，清除模糊感 */
-        font-weight: 600 !important;       /* 提升字重，使数字和中文笔画更锐利 */
-        text-shadow: none !important;      /* 移除可能导致发虚的阴影 */
+        opacity: 1.0 !important;
+        font-weight: 600 !important;
+        text-shadow: none !important;
     }
 
-    /* 3. 表头强化：确保表格的头部背景色稍深，并加粗显示，清晰断代 */
     div[data-testid="stDataFrame"] th,
     .stDataFrame th {
         background-color: var(--secondary-background-color) !important;
@@ -144,7 +100,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 💡 数据及业务指标初始化 (功能与数据安全锚定)
+# 💡 2. 数据与业务指标初始化
 # ==========================================
 PROJECT_STAGES = ["线索", "机会点", "招投标", "已中标"]
 
@@ -161,14 +117,14 @@ BASE_ACCOUNTS = [
 
 system_current_year = datetime.now().year
 
-# --- 侧边栏：KPI 目标动态配置 ---
+# --- 侧边栏：KPI 目标配置 ---
 with st.sidebar.expander("⚙️ 运营大屏 KPI 智能目标配置", expanded=False):
     st.markdown(f"设定 **{system_current_year}** 年的核心硬性考核指标：")
     cfg_rev = st.number_input("年度确收目标(元)", min_value=0.0, value=5000000.0, step=50000.0)
     cfg_col = st.number_input("年度回款目标(元)", min_value=0.0, value=4500000.0, step=50000.0)
 
 # ==========================================
-# 2. 🚀 云数据库 API 驱动引擎
+# 3. 🚀 云数据库 API 驱动引擎
 # ==========================================
 try:
     SB_URL = st.secrets["secrets"]["SUPABASE_URL"]
@@ -254,7 +210,6 @@ def load_db_data():
 st.cache_data.clear()
 projects, orders, collections, revenues, ledgers = load_db_data()
 
-# 用于 CSV 导出的辅助函数
 def make_csv_buffer(df):
     if df.empty: return None
     csv_buffer = io.StringIO()
@@ -268,7 +223,7 @@ for l in ledgers:
 DYNAMIC_ACCOUNT_LIST = sorted(list(dynamic_accounts))
 
 # ==========================================
-# 3. 🗺  左侧导航大气命名[cite: 1]
+# 4. 🗺️ 左侧导航
 # ==========================================
 menu_options = [
     "📊 集团核心业绩与双轨 KPI 战略大屏", 
@@ -283,7 +238,7 @@ with st.sidebar:
     menu = st.sidebar.radio("导航菜单", menu_options, key="nav_menu", label_visibility="collapsed")
 
 # ==========================================
-# 4. 页面 1: 集团核心业绩与双轨 KPI 战略大屏
+# 5. 页面 1: 集团核心业绩与双轨 KPI 战略大屏
 # ==========================================
 if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
     st.title("集团核心业绩与双轨 KPI 战略大屏")
@@ -307,7 +262,6 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
         </div>
         """
     
-    # 2x2 指标布局（确保卡片大小对称一致，完美防换行）
     st.markdown("#### 💸 确认收入 KPI 数据链")
     row1_col1, row1_col2 = st.columns(2)
     with row1_col1:
@@ -322,7 +276,6 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
     with row2_col2:
         st.markdown(render_kpi_card("大盘累计资金进账", f"¥{annual_collection_done:,.2f}", f"⚡ 达成率 {col_annual_rate*100:.1f}%", "#00B0FF"), unsafe_allow_html=True)
     
-    # 推进进度条
     st.markdown("<br>", unsafe_allow_html=True)
     st.markdown(f"**🔷 {current_year}年度确认收入 KPI 推进进度:**")
     st.progress(min(1.0, rev_annual_rate))
@@ -331,7 +284,6 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
     
     st.markdown("---")
     
-    # 历史演进模块
     st.markdown('<h3>🗂️ 跨断代全景历史业绩演进脉络</h3>', unsafe_allow_html=True)
     with st.container(border=True):
         history_list = []
@@ -361,12 +313,11 @@ if menu == "📊 集团核心业绩与双轨 KPI 战略大屏":
         except: st.info("📊 演进图深度加载中...")
 
 # ==========================================
-# 5. 页面 2: 通信业务拉通一体化智能流水台账
+# 6. 页面 2: 通信业务拉通一体化智能流水台账
 # ==========================================
 elif menu == "📝 通信业务拉通一体化智能流水台账":
     st.title("通信业务拉通一体化智能流水台账")
     
-    # 容器化包裹，消除空卡片
     with st.container(border=True):
         f_col1, f_col2, f_col3 = st.columns([2, 2, 3])
         unique_projects = ["全部项目"] + sorted(list(set(p["name"] for p in projects.values())))
@@ -387,7 +338,6 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
         project_rows.append({"项目框架名称": p["name"], "客户简称": p["client"], "框架标的总额": p["target"], "已下订单含税总额": p["amt_with_tax_total"], "额度消耗比例": f"{ratio*100:.1f}%", "安全预警": warning_status, "创建日期": p["bid_date"], "当前状态": p["stage"]})
     if project_rows:
         df_p_view = pd.DataFrame(project_rows)
-        # 优化预警单元格样式，在所有主题下均保持高清晰高反差
         st.dataframe(df_p_view.style.map(lambda v: "background-color: rgba(197, 34, 31, 0.15); color: #FF5252; font-weight: bold;" if "🚨" in str(v) else ("background-color: rgba(176, 96, 0, 0.15); color: #FFD740; font-weight: bold;" if "⚠️" in str(v) else ""), subset=["安全预警"]), use_container_width=True, hide_index=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -419,17 +369,14 @@ elif menu == "📝 通信业务拉通一体化智能流水台账":
         
     if order_rows:
         df_o_view = pd.DataFrame(order_rows)
-        
-        # 💡 核心修复：在这里直接对 DataFrame 的数据列进行千分位和货币符号格式化，转换为 String。
-        # 彻底摆脱 Pandas Styler 机制，防止其生成的 HTML 破坏我们写的高对比度 CSS 渲染！
+        # 转换千分位文本以保证纯原生渲染对比度
         for col in ["接单含税金额", "累计已确收收入", "⏳ 尚未签收", "累计已回款", "待追收尾款"]:
             df_o_view[col] = df_o_view[col].map(lambda x: f"¥{x:,.2f}")
         
-        # 直接输出高对比度绑定的原生 DataFrame，字迹极其清晰锐利！
         st.dataframe(df_o_view, use_container_width=True, hide_index=True)
 
 # ==========================================
-# 6. 页面 3: 核心业务数据全生命周期控制中心
+# 7. 页面 3: 核心业务数据全生命周期控制中心
 # ==========================================
 elif menu == "➕ 核心业务数据全生命周期控制中心":
     st.title("核心业务数据全生命周期控制中心")
@@ -587,7 +534,7 @@ elif menu == "➕ 核心业务数据全生命周期控制中心":
                             st.success("🎉 订单分项明细审计链覆写成功！"); st.rerun()
 
 # ==========================================
-# 7. 🏦 现代复式财务云账本 (hledger 架构)
+# 8. 🏦 现代复式财务云账本 (hledger 架构)
 # ==========================================
 elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
     st.title("现代复式财务云账本 (hledger 架构)")
@@ -632,7 +579,6 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
                 df_journal = pd.DataFrame(ledgers)[["date", "description", "account_from", "account_to", "amount", "tags", "comment"]]
                 df_journal.columns = ["交易核算日期", "核心经济事务描述", "资金去处 (贷/From)", "资金归结 (借/To)", "涉及金额 (元)", "流向Tags", "详细备注"]
                 
-                # 直接转换数字列，摒弃 Styler
                 df_journal["涉及金额 (元)"] = df_journal["涉及金额 (元)"].map(lambda x: f"¥{x:,.2f}")
                 st.dataframe(df_journal, use_container_width=True, hide_index=True)
 
@@ -691,7 +637,7 @@ elif menu == "🏦 现代复式财务云账本 (hledger 架构)":
                 if success_flag: st.success("🎉 复合多借多贷账目配平成功！"); st.rerun()
 
 # ==========================================
-# 8. 页面 5: 库容安全熔断释放与本地备份中枢
+# 9. 页面 5: 库容安全熔断释放与本地备份中枢
 # ==========================================
 elif menu == "💾 库容安全熔断释放与本地备份中枢":
     st.title("库容安全熔断释放与本地备份中枢")
